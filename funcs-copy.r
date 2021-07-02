@@ -137,15 +137,14 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|
 # axis number:  whether or not to lable the axis numbers
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
-Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8, 
+Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)),
                          mythe =T, titleface = 'italic',colorset = c('um','gg'), color_grd = c('threecolor','grd'),
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F,
-                         labels = NULL, sort =TRUE, assay = 'RNA',
+                         labels = NULL, sort =TRUE,
                          l = alpha('lightgrey', 0.3), h = 'red', m = 'purple' ) {
   if (class(data) == 'Seurat') {
-    DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
                             facet , g))
   } else {
@@ -187,7 +186,7 @@ Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8,
         } else {colorset}   ) ,  na.value = alpha('grey',0.4)) })+
       (if(isTRUE(do.label) & !is.numeric(fd[[g]]))
       { shadowtext::geom_shadowtext(data = (fd %>%  group_by(get(g)) %>% dplyr::select(d1, d2)%>%
-                                              dplyr::summarise_all(median) %>%
+                                              dplyr::summarise_all(mean) %>%
                                               dplyr::rename_all(.funs = ~c('center', d1,d2))),
                                     mapping = aes_string(label = 'center', x = d1, y =d2), color = 'black',
                                     bg.colour = 'white', size = gs(labelsize))  })+
@@ -235,7 +234,7 @@ Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8,
         })+
         (if(isTRUE(do.label) & !is.numeric(fd[[i]]))
         { shadowtext::geom_shadowtext(data = (fd %>%  group_by(get(i)) %>% dplyr::select(d1, d2)%>%
-                                                dplyr::summarise_all(median) %>%
+                                                dplyr::summarise_all(mean) %>%
                                                 dplyr::rename_all(.funs = ~c('center', d1,d2))),
                                       mapping = aes_string(label = 'center', x = d1, y =d2), color = 'black',
                                       bg.colour = 'white', size = gs(labelsize))  })+

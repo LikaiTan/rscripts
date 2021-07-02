@@ -12,6 +12,7 @@ library(ggrastr)
 library(shadowtext)
 library(ggrepel)
 library(purrr)
+library(cowplot)
 library(magrittr)
 library(dplyr)
 library(stringr)
@@ -21,8 +22,20 @@ library(tibble)
 library(limma)
 library(clusterProfiler)
 
-source('/home/big/R_publib/likai_func/funcs.r')
-file.edit('/home/big/R_publib/likai_func/funcs.r')
+source('/home/big/tanlikai/script/rscripts/funcs.r')
+file.edit('/home/big/tanlikai/script/rscripts/funcs.r')
+
+figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
+                     path = 'result/fig/',
+                     scale = 1, units = 'mm', dpi = 300
+) {
+  ggsave2( plot = p, filename = filename,device = device,
+           path = path, scale = scale, width = w, height = h,
+           units = units, dpi = dpi, limitsize = TRUE)
+}
+
+
+
 allcsv <- list.files(path = 'result', pattern = '.csv') 
 
 
@@ -39,6 +52,9 @@ allcounts %<>% distinct(GeneSymbol, .keep_all = T)
 
 allcounts %<>% column_to_rownames('GeneSymbol')
 
+colnames(allcounts) <- str_remove_all(colnames(allcounts), '.count')
+
+head(allcounts)
 dim(allcounts)
 
 rowmeans <- rowMeans(allcounts[,2:23]) %>% sort(decreasing = T)
@@ -54,7 +70,7 @@ after <- apply(allcounts[,2:23],1,function(x) length(x[x>10])>=4)
 qcn <- after[after == 1] %>% names
 
 
-allcounts_f <- allcounts[qcn,]
+allcounts_f <- allcounts[qcn,2:17]
 # filter MT
 allcounts_f <- allcounts_f[grep("^MT-",rownames(allcounts_f),ignore.case=T,invert=T),]
 GeneID <- as.data.frame(row.names = rownames(allcounts_f), allcounts_f[,1])
@@ -64,7 +80,7 @@ allcounts_f$GeneID <- NULL
 ########################################
 #groupName<-sampleDetail$Culture.condition  
 
-groupnames <- str_extract(colnames(allcounts_f), '.+(?=_\\d+.c)')  %>% as.vector() %>% as.factor()
+groupnames <- str_extract(colnames(allcounts_f), '.+(?=_\\d+)')  %>% as.vector() %>% as.factor()
 groupnames
 
 
@@ -79,7 +95,7 @@ library("edgeR")
 design <- model.matrix(~0+groupnames)
 rownames(design)<-colnames(allcounts_f)
 colnames(design)<-levels(factor(groupnames))
-########################################################################
+##############################normalization##########################################
 
 y <- DGEList(counts=allcounts_f, group=groupnames)
 y
@@ -115,8 +131,10 @@ umap_y <- umap(t(scaled_y)) %>% as.data.frame() %>% `colnames<-`(c('UMAP_1', 'UM
 
 umap_y$sample <- rownames(umap_y)
 
-ggplot(umap_y, aes(x = UMAP_1,y = UMAP_2, color = sample))+
-  geom_text(aes(text=sample))
+umap_y$group <- str_extract(umap_y$sample, '.+(?=_\\d+)')  %>% as.vector() 
+
+ggplot(umap_y, aes(x = UMAP_1,y = UMAP_2, color = group))+
+  geom_text(aes(label=sample))
 
 
 
@@ -127,7 +145,9 @@ ggplot(umap_y, aes(x = UMAP_1,y = UMAP_2, color = sample))+
 # plotPCA(log2(cpm(y)+1), col=colors[x],  xlim=c(-0.6,0.6) )                                 # 检查PCA
 ########################################################################
 
-my.contrasts = makeContrasts(MF_noculture="MF-noculture", PAC_noculture="PAC-noculture", levels=design)
+my.contrasts = makeContrasts(BCMI_BCNMI="BCMI-BCNMI",
+                             # MKC_CA_MKC_NA="MKC_CA-MKC_NA",
+                             levels=design)
 
 # 估计离散值（Dispersion）。前面已经提到负二项分布（negative binomial，NB)需要均值和离散值两个参数。
 # edgeR 对每个基因都估测一个经验贝叶斯稳健离散值（mpirical Bayes moderated dispersion），
@@ -165,17 +185,17 @@ pheatmap(id2,fontsize=8,angle_col=45,cutree_rows=2,cutree_col=5,scale="none",clu
 #################################################################
 
 # 如果是glmFit则使用glmLRT, 但是如果是glmQLFit则使用glmQLFTest,这个更严格
-lrt.MF_noculture <- glmQLFTest(fit, contrast=my.contrasts[,"MF_noculture"])
-lrt.PAC_noculture <- glmQLFTest(fit, contrast=my.contrasts[,"PAC_noculture"])
+lrt.BCMI_BCNMI<- glmQLFTest(fit, contrast=my.contrasts[,"BCMI_BCNMI"])
+# lrt.MKC_CA_MKC_NA <- glmQLFTest(fit, contrast=my.contrasts[,"MKC_CA_MKC_NA"])
 
 # 可选矫正FDR
 # deg.edger <- lrt.MF_noculture$table[p.adjust(lrt.MF_noculture$table$PValue, method = "BH") < 0.1, ]
 # dim(deg.edger)
+design
+summary(decideTestsDGE(lrt.BCMI_BCNMI, adjust.method="BH", p.value=0.1, lfc=1))  # 看一下大概有多少个上下条, 把BH换成none就是原始的p-value
+# summary(decideTestsDGE(lrt.MKC_CA_MKC_NA,adjust.method="BH", p.value=0.1, lfc=1))
 
-summary(decideTestsDGE(lrt.MF_noculture, adjust.method="BH", p.value=0.1, lfc=1.5))  # 看一下大概有多少个上下条, 把BH换成none就是原始的p-value
-summary(decideTestsDGE(lrt.PAC_noculture,adjust.method="BH", p.value=0.1, lfc=1.5))
-
-deg1 <- decideTestsDGE( lrt.MF_noculture, adjust.method = 'fdr', p.value =0.1, lfc=1.5)                
+deg1 <- decideTestsDGE( lrt.MKC_CA_MKC_NA, adjust.method = 'fdr', p.value =0.1, lfc=1.5)                
 deg1.names <-rownames(deg1)[deg1!=0]  
 
 # 或者用常规的提取办法, 但没有lfc threshold
@@ -191,7 +211,7 @@ library("ggrepel")
 # Set it globally, obligatory after Jan. 2021
 options(ggrepel.max.overlaps = Inf)
 
-v0<-lrt.MF_noculture$table
+v0<-lrt.MKC_CA_MKC_NA$table
 # deg.edger0 <- v0[v0$PValue<=0.01 & abs(v0$logFC)>=1.5 & p.adjust(v0$PValue, method = "BH") < 0.1, ]       # FDR 0.1
 deg.edger0 <- v0[v0$PValue<=0.01 & abs(v0$logFC)>=1.5 ,]                        # show pV better than 0.01 and pV 1.5
 nrow(deg.edger0)
