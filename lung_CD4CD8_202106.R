@@ -756,9 +756,9 @@ surface_RNA <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')), surfac
 
 surface_CITE <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),sz = 0.3, CD4CD8@assays$CITE@data %>% rownames(), assay = 'CITE', color_grd = 'grd', slot = 'scale.data')
 
-RNAvsCITE  <- PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1) %T>%  figsave('RNAvsCITE.pdf',200, 290)
+RNAvsCITE  <- PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,vjust = -10) %T>%  figsave('RNAvsCITE.pdf',200, 290)
 
-
+PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,label_y = -2)
 
 map(lungTcell, ~ .x@assays$CITE@counts %>% rownames )
 
@@ -1265,6 +1265,10 @@ TCRbyCD4CD8 <-CD4CD8@meta.data %>% filter(cdr3_paired_freq >1  & CD4CD8 %in% c('
   arrange(pairedfreq)
 nrow(TCRbyCD4CD8 %>% filter())
 
+
+TCRBbyCD4CD8 <-CD4CD8@meta.data %>% filter(cdr3_TRB_freq >1  & CD4CD8 %in% c('CD4', 'CD8')) %>% select(cdr3_TRB,CD4CD8) %>%group_by(CD4CD8,cdr3_TRB) %>%  summarise(pairedfreq = n()) %>% arrange(CD4CD8) %>% mutate(cdr3_TRB = factor(cdr3_TRB, unique(cdr3_TRB)) )
+cdr3_TRB
+
 library(ggalluvial)
 TCRsharingCD4CD8 <- (TCRbyCD4CD8 %>% 
   ggplot(
@@ -1280,6 +1284,22 @@ TCRsharingCD4CD8 <- (TCRbyCD4CD8 %>%
     theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
     guides(fill = guide_legend(ncol = 1, title = NULL)) +mytheme)%>% rasterise(dpi = 300)
 TCRsharingCD4CD8
+
+(TCRBbyCD4CD8 %>% 
+    ggplot(
+      aes( x = CD4CD8 , y = pairedfreq, fill = cdr3_TRB,  stratum= cdr3_TRB, alluvium  = cdr3_TRB))+
+    ggtitle("TCR sharing between CD4 and CD8")+
+    geom_flow(stat = "alluvium",
+              color = "darkgray") +
+    # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
+    theme_minimal_hgrid()+
+    scale_fill_manual(values = rainbow(1484))+
+    geom_stratum(size = 0.1, color = alpha('black', 0.5))+ 
+    xlab(NULL) +ylab("TCRab frequencies")+
+    theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
+    guides(fill = guide_legend(ncol = 1, title = NULL)) +mytheme)%>% rasterise(dpi = 300)
+
+
 
 TCRbytissue <-CD4CD8@meta.data %>% filter(cdr3_paired_freq >1 &CD4CD8 %in% c('CD8', 'CD4')) %>% select(cdr3_paired,tissue,CD4CD8) %>%group_by(tissue,cdr3_paired,CD4CD8) %>%  summarise(pairedfreq = n()) %>% arrange(CD4CD8, tissue) %>% mutate(cdr3_paired = factor(cdr3_paired, unique(cdr3_paired)) )
 
