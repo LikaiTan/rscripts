@@ -137,17 +137,17 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|
 # axis number:  whether or not to lable the axis numbers
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
-Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8, 
-                         dpi = 300, mid.point = 0.5, ncol = min(5, length(g)),
+Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8, 
+                         dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
                          mythe =T, titleface = 'italic',colorset = c('um','gg'), color_grd = c('threecolor','grd'),
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F,
-                         labels = NULL, sort =TRUE, assay = 'RNA',
-                         l = alpha('lightgrey', 0.3), h = 'red', m = 'purple' ) {
+                         labels = NULL, sort =TRUE, assay = 'RNA',slot = 'data',
+                         l = alpha('lightgrey', 0.3), h = 'red', m = 'purple' , navalue =alpha('lightgrey', 0.4) ) {
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
-                            facet , g))
+                            facets , g,other), slot = slot)
   } else {
     fd <- data
   }
@@ -167,24 +167,27 @@ Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8,
     })
     gp <- ggplot(fd, aes_string(x = d1, y = d2)) +
       geom_point_rast(aes_string(color = g), size = sz, stroke = 0,raster.dpi = dpi) +
-      theme_classic()  +
+      theme_classic()  + 
+      ( if (!is.null(facets)) {
+        facet_wrap(facets, ncol = facetcol)
+      })+
       ( if (isTRUE(mythe)) {
         mytheme
       })+
       #color
       (if (isTRUE(is.numeric(fd[[g]]))){ if (color_grd == 'grd') {
-        scale_color_gradientn( na.value = alpha('lightgrey', 0.3),
+        scale_color_gradientn( na.value = navalue,
      colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
 
       } else {
-        scale_color_gradient2(low = l, high = h, mid = m,
+        scale_color_gradient2(low = l, high = h, mid = m, na.value = navalue,
                               midpoint = median(fd[[g]][fd[[g]]>0])*mid.point*2)}
       } else {
         scale_color_manual(values = (if (colorset == "gg"){
           ggplotColours(length(unique(fd[[g]])))
         } else if (colorset == 'um') {
           umap.colors
-        } else {colorset}   ) ,  na.value = alpha('grey',0.4)) })+
+        } else {colorset}   ) ,  na.value = navalue) })+
       (if(isTRUE(do.label) & !is.numeric(fd[[g]]))
       { shadowtext::geom_shadowtext(data = (fd %>%  group_by(get(g)) %>% dplyr::select(d1, d2)%>%
                                               dplyr::summarise_all(median) %>%
@@ -215,23 +218,26 @@ Feature_rast <- function(data, g = 'ident',facet = NULL, sz = 0.8,
       ggplot(fd, aes_string(x = d1, y = d2)) +
         geom_point_rast(aes_string(color = i),size = sz,stroke = 0, raster.dpi = dpi) +
         theme_classic() +
+        ( if (!is.null(facets)) {
+          facet_wrap(facets, ncol = facetcol)
+        })+
         ( if (isTRUE(mythe)) {
           mytheme
         })+
         #color
         (if (isTRUE(is.numeric(as.vector(fd[[i]])))){if (color_grd == 'grd') {
-          scale_color_gradientn( na.value = alpha('lightgrey', 0.3),
+          scale_color_gradientn( na.value = navalue,
                                  colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
 
         } else {
-          scale_color_gradient2(low = l, high = h, mid = m,
+          scale_color_gradient2(low = l, high = h, mid = m,na.value = navalue,
                                 midpoint = median(fd[[i]][fd[[i]]>0])*mid.point*2) }
         } else {
           scale_color_manual(values = (if (colorset == "gg"){
             ggplotColours(length(unique(fd[[i]])))
           } else if (colorset == 'um') {
             umap.colors
-          } else {colorset}   ), na.value = alpha('grey',0.4))
+          } else {colorset}   ), na.value = navalue)
         })+
         (if(isTRUE(do.label) & !is.numeric(fd[[i]]))
         { shadowtext::geom_shadowtext(data = (fd %>%  group_by(get(i)) %>% dplyr::select(d1, d2)%>%
@@ -431,14 +437,14 @@ figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
 
 
 
-ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = NULL,size = 8,
+ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = NULL,size = 8, facet = NULL,
                        ncol = min(3, length(g)), split = NULL, colors = ggplotColours(cln), othertheme = NULL,
                        idents = NULL,alpha_point =0.8, alpha_fill = 0.4, jitter = T, box = F,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',
                        labels = NULL,
                        mythe =F, titleface = 'italic'){
   if (length(g) == 1) {
-    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by)
+    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,split.by = facet)
     cln = fig$data$ident %>% unique() %>% length()
                   fig +
             (if(isTRUE(jitter)){
@@ -463,7 +469,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = N
                     othertheme
   } else {
     gp <- lapply(g, function(i) {
-      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by)
+      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by,split.by = facet)
     cln = fig$data$ident %>% unique() %>% length()
     fig +
       (if(isTRUE(jitter)){

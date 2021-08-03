@@ -1018,7 +1018,8 @@ VD2freqtable <- GDTlung_s@meta.data %>% filter(cdr3_TRD_freq >1 &v_gene_TRD == '
 VD2freqtable
 
 
-VD2freqtable %>% 
+0
+%>% 
 
 ggplot(
   aes( x = tissue, y = TCRDfreq, fill = cdr3_TRD,  stratum= cdr3_TRD, alluvium  = cdr3_TRD))+
