@@ -19,7 +19,7 @@ library(xlsx)
 # library(rstatix)
 library(stringr)
 library(magrittr)
-library(openxlsx)
+
 library(harmony)
 # themes and functions ------------------------------------------------------------------
 source('/home/big/tanlikai/script/rscripts/funcs.r')
@@ -116,6 +116,7 @@ GDTlung_1@meta.data <- GDTlung_1@meta.data %>%
   mutate(tissue = case_when(X1_TotalSeqC_LuPa >= 100 & X9_TotalSeqC_LN < 180 ~ 'lung',
                             X1_TotalSeqC_LuPa < 100 & X9_TotalSeqC_LN >= 180 ~ 'luLN',
                             X1_TotalSeqC_LuPa >= 100 & X9_TotalSeqC_LN >= 180 ~ 'Doublet')) %>%
+  mutate(tissue = factor(tissue, levels = c('luLN', 'lung', 'Doublet'))) %>% 
   `rownames<-`(GDTlung_1$bc_backup)
 GDTlung_1$patient <- 'p25'
 dim(GDTlung_1)
@@ -129,7 +130,7 @@ table(GDTlung_1$tissue,useNA = 'always')
 tissuehashtag <- Feature_rast(GDTlung_1, g = 'tissue', d1 = "X1_TotalSeqC_LuPa" , d2 = "X9_TotalSeqC_LN",
              noaxis = F, axis.number = T)+xlim(0,5000)+ylim(0, 10000)+
   geom_vline(xintercept = 100)+geom_hline(yintercept = 180)
-figsave(tissuehashtag,'tissuehashtag.pdf', 150,150)
+figsave(tissuehashtag,'tissuehashtag_beforetrimming.pdf', 150,150)
 
 GDTlung_2_3 <- NormalizeData(GDTlung_2_3, assay = "HTO", normalization.method = "CLR") %>% 
   ScaleData(assay='HTO', features = rownames(GDTlung_2_3[['HTO']]))
@@ -361,7 +362,11 @@ GDTlung_s %<>% ScaleData(vars.to.regress = c("percent.mito",
                                                     "percent.ribo",
                                                     'nCount_RNA','nFeature_RNA' ))
 
-GDTlung_s %<>% ScaleData(assay = 'RNA', features = rownames(GDTlung_s),
+GDTlung_s  %<>%   FindVariableFeatures(assay = 'RNA',nfeatures =4000, selection.method = 'vst')
+# GDTlung_s@assays$RNA@var.features%<>%  
+#   str_subset('^TRG|^TRD|^MT|^IG|^TRA|^TRB^|^HIST|^MIR|^HSP', negate = T)
+
+GDTlung_s %<>% ScaleData(assay = 'RNA', features = VariableFeatures(GDTlung_s),
                        vars.to.regress = c("percent.mito", 'patient',
                                            # "S.Score", 'G2M.Score',
                                            "percent.ribo",
@@ -424,6 +429,8 @@ GDTlung_s %<>% ScaleData(vars.to.regress = c("percent.mito", 'patient',
                                            # "S.Score", 'G2M.Score',
                                            "percent.ribo",
                                            'nCount_RNA','nFeature_RNA' ))
+
+GDTlung_s@assays$RNA@var.features
 
 GDTlung_s %<>% ScaleData(assay = 'RNA', features = rownames(GDTlung),
                        vars.to.regress = c("percent.mito", 'patient',
@@ -506,7 +513,7 @@ cl_comp
 library(ggalluvial)
 library(RColorBrewer)
 
-ID_cl <- c(brewer.pal(9,'Blues')[4:9], brewer.pal(9,'Reds')[4:9])
+ID_cl <- c(brewer.pal(9,'Blues')[4:9], brewer.pal(9,'Greens')[4:9])
 
 cl_comp_flow <- ggplot(cl_comp, aes(y = n, x = Cell_cluster, fill = ID, color = ID,
                                      stratum = ID  )) +
@@ -532,7 +539,7 @@ cl_comp_flow <- ggplot(cl_comp, aes(y = n, x = Cell_cluster, fill = ID, color = 
 cl_comp_flow
 
 
-cl_comp_flow +theme(axis.text = element_text(size = 12), legend.text = element_text(size = 12))
+Fcl_comp_flow +theme(axis.text = element_text(size = 12), legend.text = element_text(size = 12))
 
 
 Umap_GDTlung<- Feature_rast(GDTlung_s,c('Cell_cluster','tissue'), sz = 0.5,
@@ -574,7 +581,7 @@ top10_hgdT <- hgdTmarkers %>% filter(!grepl('^RP|^MT|^TRG|^TRD|^AC', gene)) %>%
 
 
 Heat_GDTlung <- DoHeatmap(GDTlung_s,features = top10_hgdT$gene,raster = T, 
-                          group.colors = umap.colors,size = gs(8))%>%heat_theme() %>%
+                          group.colors = umap.colors,size = gs(8))%>%heat_theme() %T>%
   figsave('heatmap_GDTlung_6p.pdf',150,250)
 Heat_GDTlung
 
@@ -640,8 +647,8 @@ gcanno <- as.vector(c('GM_A: Naive or immature T cell',
                       'GM_C: Proliferating',
                       "GM_D: Type-3 immunity",
                       "GM_E: Interferon induced",
-                      "GM_F: CTL response (VD2)",
-                      "GM_G: CTL response (VD1)",
+                      "GM_F: CTL response (innate)",
+                      "GM_G: CTL response (adaptive)",
                       
                       "GM_H: Acute activation"))
 
@@ -671,21 +678,17 @@ GM_score_heat
 TCRdirs <- list.dirs(path = 'raw') %>% str_subset('VDJ.+outs$' )
 
 
-
-lung1TCR <- read.csv('raw/VDJ_Falk1_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_1"))
-
-lung2_3TCR <- read.csv('raw/VDJ_322_325_453_456_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_2"))
-
-lung4_6TCR <- read.csv('raw/VDJ_falk3_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_3"))
+lungTCR
 
 
-lungTCR <- rbind(lung1TCR, lung2_3TCR,lung4_6TCR) %>% select(-barcode)
+lungTCR <- map2(TCRdirs, c(2,1,3), ~ rbind(read.csv(paste0(.x, '/all_contig_annotations.csv' )),
+                                        read.csv(paste0(.x, '/all_contig_annotations_p2.csv' )))%>% 
+               filter(productive == 'True'& is_cell == 'True'& grepl('GV|DV', v_gene)) %>%
+               dplyr::select(c(1, 5:10, 13,14))  %>%
+               mutate(  
+                       bc_backup = paste0(barcode, "_",.y)   ) %>% dplyr::select(-barcode)) %>% reduce(.f = rbind)
+lungTCR
+
 
 
 TRGs <- lungTCR %>% filter(grepl('GV', v_gene))%>% distinct(bc_backup, .keep_all = T) %>% 
@@ -729,16 +732,18 @@ TCRs
 
 GDTlung_s$bc_backup <- rownames(GDTlung_s@meta.data)
 
-metabackup <- GDTlung_s@meta.data
+metabackup <- GDTlung_s@meta.data 
 
+GDTlung_s@meta.data  %<>%  select_at(.vars = vars(-contains(c('TRG','TRD','paired', '.x', '.y'))))
+GDTlung_s
 
-GDTlung_s@meta.data  %<>% left_join(TCRs, by = 'bc_backup') %>% `rownames<-`(GDTlung_s@meta.data$bc_backup )
+GDTlung_s@meta.data  %<>% left_join(TCRs, by = 'bc_backup', suffix = c('','')) %>% `rownames<-`(GDTlung_s@meta.data$bc_backup )
 
 GDTlung_s@meta.data
 
-# this line to remove repeated join
-GDTlung_s@meta.data %<>% `colnames<-`(str_remove(colnames(GDTlung_s@meta.data), '.y')) %>%
-  select(!ends_with('.x')) 
+# # this line to remove repeated join
+# GDTlung_s@meta.data %<>% `colnames<-`(str_remove(colnames(GDTlung_s@meta.data), '.y')) %>%
+#   select(!ends_with('.x')) 
 # mapped TCR
 TRDmapp <- GDTlung_s@meta.data %>% count(ID, v_gene_TRD) %>%  group_by(ID)  %>%
      mutate(percent = n/sum(n)*100) 
@@ -772,12 +777,19 @@ mappedTCR <- map2(list(TRDmapp, TRGmapp, pairedmapp), list('v_gene_TRD','v_gene_
 mappedTCR
 ViolinPlot(subset(GDTlung, length_TRD >0 & patient == '#3'),'length_TRD')
 
+saveRDS(GDTlung_s, 'GDTlung_newTCR_2021.0914.rds')
 
 TCRmapping <- GDTlung_s@meta.data %>% group_by(tissue, patient) %>%  count(TCR_summary) %>% 
   mutate(percent = n/sum(n)*100)
-(ggplot(TCRmapping,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+
+
+TCRmapping_old <- GDTlung_inte@meta.data %>% group_by(tissue, patient) %>%  count(TCR_summary) %>% 
+  mutate(percent = n/sum(n)*100)
+
+(TCRmapping %>% filter(TCR_summary == 'paired TCR')) == (TCRmapping_old %>% filter(TCR_summary == 'paired TCR')) 
+
+(ggplot(TCRmapping_old,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+
     scale_y_continuous(breaks = c(10,20,30,40,50,60,70,80,90,100))+
-    mytheme) %T>% figsave('mappingrate_TCR.pdf', 150, 60)
+    mytheme) %T>% figsave('mappingrate_old_TCR.pdf', 150, 60)
 
 
 figsave(mappedTCR,'lunggdt_mappedTCR.pdf', 200,100)
@@ -812,7 +824,6 @@ GDTlung_s@meta.data %<>% left_join(cdr3TRD_freq, by = c('cdr3_TRD','patient')) %
 ##paired_simplified
 
 
-saveRDS(GDTlung_s,'GDTlung_6p_Seurat_07062021.rds')
 
 patient <- c(GDTlung_s$patient %>% unique()) %>% sort()
 
@@ -824,7 +835,7 @@ TCRD_FREQ <-map(patient,~
 TCRD_FREQ
 
 
-Feature_rast(GDTlung_s, 'cdr3_TRD_perc', color_grd = 'grd', mythe = F)+
+Feature_rast(GDTlung_s, 'cdr3_TRD_perc', color_grd = 'grd', mythe = T, noaxis = F)+
   ggtitle('TRD_clone (%)')+
   theme(plot.title = element_text(size = 12))
 
@@ -902,7 +913,7 @@ GDTlung_s$Top5TRD_luLN <- NULL
 
  # GDTlung@meta.data %<>% `colnames<-`(str_remove(colnames(GDTlung@meta.data), '.y')) %>% select(!ends_with('.x')) 
  
- Feature_rast(GDTlung_s, c('tissue', 'Top5TRD_lung','Top5TRD_luLN'), do.label = F, 
+ Feature_rast(GDTlung_s, c('tissue', 'Top5TRD_lung','Top5TRD_luLN'), do.label = F, ncol = 1,
               colorset = ggplotColours(28))
  
  top10trdcl <-
@@ -911,21 +922,24 @@ GDTlung_s$Top5TRD_luLN <- NULL
      '#ffffcc'
    )
  
- luLN_expanded<-Feature_rast(GDTlung_s, "Top5TRD_luLN", do.label = F, facet ='patient')+
+ luLN_expanded<-Feature_rast(GDTlung_s, "Top5TRD_luLN", do.label = F, facets ='patient')+
      scale_color_manual(values = c(  
        top10trdcl[1:(length(unique(GDTlung_s$Top5TRD_luLN))-2)],
                           'mapped TCR' = alpha('yellow',0.5)), 
-       na.value =alpha('lightgrey',0.5) )+facet_grid(~patient)+
+       na.value =alpha('lightgrey',0.5) )+
    ggtitle("Most Expanded TRD in luLN")
  
  
- lung_expanded<- Feature_rast(GDTlung, "Top5TRD_lung", do.label = F, facet ='patient')+
-   scale_color_manual(values = c(  
-     top10trdcl[1:(length(unique(GDTlung$Top5TRD_lung))-2)],
-     'mapped TCR' = alpha('yellow',0.5)), 
-     na.value =alpha('lightgrey',0.5) )+facet_grid(~patient)+
-   ggtitle("Most Expanded TRD in lung")
+ map(patient, ~ Feature_rast(subset(GDTlung_s, patient == .x),  'Top5TRD_luLN', do.label = F, sz = 1)+
+                        ggtitle(.x )+ 
+                        guides(color = guide_legend(ncol =1, override.aes = list(size = 1.5))) ) %>% PG(ncol = 1)
  
+ 
+ map(patient, ~ Feature_rast(subset(GDTlung_s, patient == .x),  'Top5TRD_lung', do.label = F, sz = 1)+
+       ggtitle(.x )+ 
+       guides(color = guide_legend(ncol =1, override.aes = list(size = 1.5))) ) %>% PG(ncol = 1)
+ 
+
  
 
 # venny nonVD2  TRD  ----------------------------------------------------
@@ -1025,21 +1039,76 @@ TCRfreqtable <- GDTlung_s@meta.data %>% filter(cdr3_paired_freq >1 )  %>% group_
   arrange(TCRfreq)
 
 TCRfreqtable %>% filter(Cell_cluster %in% c('c1', 'c2' ,'c5', 'c7', 'c6', 'c3')) %>%  
-  mutate(Cell_cluster = factor(Cell_cluster, levels = c('c1', 'c2' ,'c3','c6', 'c5', 'c7' ))) %>% 
+  mutate(Cell_cluster = factor(Cell_cluster, levels = c('c1', 'c2' ,'c5', 'c7' ,'c3','c6'))) %>% 
 
-
+  
 ggplot(
        aes( x = Cell_cluster, y = TCRfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
+  ggtitle("paired gd TCR sharing")+
+  geom_flow(stat = "alluvium",
+            color = "darkgray") +
+  # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
+  theme_minimal_hgrid()+
+  scale_fill_manual(values = rainbow(160))+
+  geom_stratum()+ 
+  xlab(NULL) +ylab("TCR frequencies")+
+  theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
+  guides(fill = guide_legend(ncol = 1, title = NULL))+
+  # facet_wrap(~patient)+
+  NULL
+
+
+
+TCRfreqtable <- GDTlung_s@meta.data %>% filter(cdr3_paired_freq >1 &  !(patient %in% c('p31', 'p32')))  %>% group_by(big_cluster, cdr3_paired, patient) %>%  summarise(TCRfreq = n()) %>% 
+  arrange(TCRfreq)
+TCRfreqtable %>% filter(big_cluster %in% c( 'nonVD2_lung_1','nonVD2_lung_2', 'nonVD2_luLN_1')) %>%  
+  mutate(big_cluster = factor(big_cluster, levels = c('nonVD2_lung_1','nonVD2_lung_2','nonVD2_luLN_1'))) %>%
+ggplot(
+  aes( x = big_cluster, y = TCRfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
+  ggtitle("TCR sharing")+
+  geom_flow(stat = "alluvium",
+            color = "darkgray") +
+  # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
+  theme_minimal_hgrid()+
+  scale_fill_manual(values = rainbow(150))+
+  geom_stratum()+ 
+  xlab(NULL) +ylab("TCR frequencies")+
+  theme(legend.position = 'none', legend.key.size = unit(2, "mm"), axis.text.x = element_text(angle = 90))+
+  guides(fill = guide_legend(ncol = 1, title = NULL))+
+  facet_wrap(~patient)+
+  NULL
+
+TCRfreqtable
+library(tidyr)
+crdf <- TCRfreqtable %>% filter(big_cluster %in% c( 'nonVD2_lung_1','nonVD2_lung_2', 'nonVD2_luLN_1')) %>%select(-patient) %>% 
+  mutate(big_cluster = factor(big_cluster, levels = c('nonVD2_lung_1','nonVD2_luLN_1','nonVD2_lung_2'))) %>%
+  spread(key = big_cluster, value = TCRfreq) %>% as.data.frame()
+
+crdf[is.na(crdf)] <- 0
+rownames(crdf) <- crdf$cdr3_paired
+crdf$cdr3_paired<- NULL
+
+chordDiagram(crdf, reduce = 0, gap.degree = 158)
+
+TCRDfreqtable <- GDTlung_s@meta.data %>% filter(cdr3_TRD_freq >0 )  %>% group_by(big_cluster, cdr3_TRD, patient) %>%  summarise(TCRfreq = n()) %>% 
+  arrange(TCRfreq)
+TCRDfreqtable %>% filter(big_cluster %in% c( 'nonVD2_lung_1','nonVD2_lung_2', 'nonVD2_luLN_1')) %>%  
+  mutate(big_cluster = factor(big_cluster, levels = c('nonVD2_lung_1','nonVD2_lung_2', 'nonVD2_luLN_1'))) %>%
+  ggplot(
+    aes( x = big_cluster, y = TCRfreq, fill = cdr3_TRD,  stratum= cdr3_TRD, alluvium  = cdr3_TRD))+
   ggtitle("TCRD sharing")+
   geom_flow(stat = "alluvium",
             color = "darkgray") +
   # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
   theme_minimal_hgrid()+
-  scale_fill_manual(values = rainbow(514))+
+  scale_fill_manual(values = rainbow(534))+
   geom_stratum()+ 
   xlab(NULL) +ylab("TCR frequencies")+
-  theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
-  guides(fill = guide_legend(ncol = 1, title = NULL))+facet_wrap(~patient)
+  theme(legend.position = 'none', legend.key.size = unit(2, "mm"), axis.text.x = element_text(angle = 90))+
+  guides(fill = guide_legend(ncol = 1, title = NULL))+
+  facet_wrap(~patient)+
+  NULL
+
 
 
 # VD2
@@ -1047,13 +1116,13 @@ ggplot(
 VD2freqtable <- GDTlung_s@meta.data %>% filter(cdr3_TRD_freq >0 &v_gene_TRD == 'TRDV2' & Cell_cluster == 'c4')  %>%
   group_by(tissue, cdr3_TRD) %>%  summarise(TCRDfreq = n()) %>% 
   arrange(TCRDfreq)
-VD2freqtable
+VD2freqtable %>% 
 
 
 
 ggplot(
   aes( x = tissue, y = TCRDfreq, fill = cdr3_TRD,  stratum= cdr3_TRD, alluvium  = cdr3_TRD))+
-  ggtitle("VD2 TCRD sharing in c4")+
+  ggtitle("VD2 TCRD sharing in between lung & LN")+
   geom_flow(stat = "alluvium",
             color = "darkgray") +
   # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
@@ -1064,6 +1133,70 @@ ggplot(
   theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
   guides(fill = guide_legend(ncol = 1, title = NULL))
 GDTlung_s$cdr3_TRD_freq
+
+
+# public TRD --------------------------------------------------------------
+
+alluniqueTRD <- readRDS('/home/big/tanlikai/Human_GDT_2019/alluniqueTRD.rds')
+
+lung_uniqueTRD <- GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% group_by(patient) %>% count(cdr3_TRD) %>%  pull(cdr3_TRD)
+
+alluniqueTRD <- c(alluniqueTRD, lung_uniqueTRD)
+
+publicTRD_ALL <- as_data_frame(alluniqueTRD) %>% count(value) %>%  filter(n >1) %>% arrange(-n) %>% 
+  dplyr::rename('cdr3_TRD' = 'value' , 'detected.no' = 'n' )
+
+GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% mutate(cdr3_TRD = paste0(v_gene_TRD, cdr3_TRD))  %>% group_by(patient) %>% count(cdr3_TRD) %>%  pull(cdr3_TRD) %>% 
+
+as_data_frame() %>% count(value) %>%  filter(n >0) %>% arrange(-n) %>% 
+  dplyr::rename('cdr3_TRD' = 'value' , 'detected.no' = 'n' )
+
+
+grep('CALGELYGPLYWGPTPRTTDKLIF', alluniqueTRD)
+
+
+
+
+
+publicTRD_ALL
+
+GDTlung_s@meta.data  %<>%  left_join(publicTRD_ALL, by = 'cdr3_TRD') %>% 
+  dplyr::mutate(public_TRD = case_when(
+    cdr3_TRD %in% publicTRD_ALL$cdr3_TRD ~ paste0('public', v_gene_TRD),
+    !is.na(cdr3_TRD) ~ 'private TRD'
+  )) %>%  dplyr::mutate(
+    public_TRD_freq = case_when(
+      detected.no > 50 ~"most public (>50)",
+      detected.no %in% 21:50 ~  "common public (21 ~ 50)",
+      detected.no %in% 5:20 ~  "public (5 ~ 20)",
+      detected.no %in% 2:4 ~ "rare public (2 ~ 4)",
+      !is.na(cdr3_TRD) ~ 'private TRD'
+    )  ) %>% mutate(public_TRD_freq = factor(public_TRD_freq, levels = c(
+      "most public (>50)","common public (21 ~ 50)",
+      "public (5 ~ 20)","rare public (2 ~ 4)",'private TRD'
+    ))) 
+
+GDTlung_s@meta.data%<>%  `rownames<-`(GDTlung_s$bc_backup)
+
+Feature_rast(GDTlung_s, 'public_TRD',colorset = c('yellow', 'blue','red','green'), do.label = F, facets = 'patient')
+
+GDTlung_s$detected.no
+
+
+GDTlung_s$length_TRD
+
+library(stringr)
+
+GDTlung_s@meta.data %<>% mutate(length_TRD = case_when(!is.na(v_gene_TRD) ~ str_length(cdr3_TRD) ), 
+                               length_TRG = case_when(!is.na(v_gene_TRG) ~ str_length(cdr3_TRG) ) )
+
+
+ViolinPlot(GDTlung_s %>% subset(v_gene_TRG %in% c('TRGV9')), 'length_TRG')
+
+
+
+
+GDTlung_s$detected.no %>% table()
 # CITESEQ analysis --------------------------------------------------------
 
 
@@ -1086,6 +1219,8 @@ rownames(GDTlung_cite@assays$CITE@counts )
 abnames <- paste0(c('CD4', 'CD8','CD45RA', 'CD45RO', 'PD1', 'CXCR3', 'CCR6','CD103', 'CD69', 'CCR7',
                    'KLRB1', 'CD27', 'KLRG1', 'IL7R', 'CD26', 'CD49a', 'KLRD1'), '.protein')
 
+trm <- paste0(c('CD103', 'CD49a', 'CD69'), '.protein')
+
 
 rownames(GDTlung_cite@assays$CITE@counts ) <- abnames
 rownames(GDTlung_cite@assays$CITE@data ) <- abnames
@@ -1102,8 +1237,12 @@ GDTlung_s %<>% NormalizeData(normalization.method ='CLR', margin = 2)
 
 GDTlung_cite
 
-CITEprotein <- Feature_rast(GDTlung_cite, abnames,color_grd = 'grd', sz = 0.4, ncol =6) %T>% figsave('CITEseq.pdf', 200, 120)
+CITEprotein <- Feature_rast(GDTlung_cite, abnames,color_grd = 'grd', sz = 0.4, ncol =6, assay = 'CITE') %T>% figsave('CITEseq.pdf', 200, 120)
 
+
+Feature_rast(GDTlung_cite, trm,color_grd = 'grd', sz = 0.4, ncol =6, assay = 'CITE')
+
+Feature_rast(GDTlung_s, c('ITGAE', 'ITGA1', 'ZNF683', 'CXCR6', 'SPRY1', 'S1PR5', 'ITGB2', 'KLF2', 'KLF3'))
 
 genenames <- c('ident', 'CD4', 'CD8A','PTPRC', 'PDCD1', 'CXCR3', 'CCR6','ITGAE', 'CD69', 'CCR7',
                'KLRB1', 'CD27', 'KLRG1', 'IL7R', 'DPP4', 'ITGA1', 'KLRD1')
@@ -1133,6 +1272,56 @@ saveRDS(GDTlung_s, 'GDTlung_6p_Seurat_07062021.rds')
 
 
 
+
+# GSEA --------------------------------------------------------------------
+
+c2c5en <- entrezlist_generator(GDTlung_s, 'c2', 'c5')
+
+c2c5en
+
+library(clusterProfiler)
+library(msigdbr)
+Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+msigdbr::msigdbr_collections() %>% as.data.frame()
+
+HALLMARK <-  msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+KEGG  <-   msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG') %>%
+  dplyr::select(gs_name, entrez_gene)
+
+GO<-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>%
+  dplyr::select(gs_name, entrez_gene)
+
+
+GSEAc2c5hallmark<-GSEA(geneList = c2c5en, TERM2GENE=HALLMARK,  nPerm = 100000, 
+     minGSSize    = 15,
+     pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+
+GSEAc2c5hallmark@result
+
+GSEAc2c5GO<-GSEA(geneList = c2c5en, TERM2GENE=GO,  nPerm = 100000, 
+                       minGSSize    = 15,
+                       pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+
+GSEAc2c5GO@result %>% view()
+
+GSEAc2c5KEGG<-GSEA(geneList = c2c5en, TERM2GENE=KEGG,  nPerm = 1000000, 
+                       minGSSize    = 10,
+                       pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+
+GSEAc2c5KEGG@result
+
+
+GSEAc2c5_c7 <- GSEA(geneList = c2c5en, TERM2GENE=Mc7,  nPerm = 1000000, 
+                    minGSSize    = 10,
+                    pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+
+
+view(GSEAc2c5_c7@result
+     )
 # integration with gdT from adult PBMC ------------------------------------
 
 Adult_GDT_2020AUG <- readRDS('/home/big/tanlikai/Human_GDT_2019/Integrated/GDT_2020AUG_woCOV.rds') %>% 
@@ -1146,7 +1335,7 @@ Adult_GDT_2020AUG%<>%   ScaleData(assay = 'RNA',
 DefaultAssay(Adult_GDT_2020AUG) <- 'RNA'
 
 GDTlung_s$tissue
-
+Adult_GDT_2020AUG$patient <- Adult_GDT_2020AUG$orig.ident
 # annotaion pehotypes 
 Adult_GDT_2020AUG@meta.data %<>% mutate(
   project = 'PBMC',
@@ -1170,6 +1359,8 @@ Adult_GDT_2020AUG[['GM']] <- NULL
 
 GDTlung_inte <- GDTlung_s
 
+
+saveRDS(GDTlung_s, 'GDTlung_newTCR_2021.0914.rds')
 GDTlung_inte  %<>% AddMetaData(GDTlung_inte@assays$CITE@data %>% t())
 GDTlung_inte@meta.data
 
@@ -1177,6 +1368,53 @@ GDTlung_inte[['integrated']]<- NULL
 GDTlung_inte[['HTO']]<- NULL
 GDTlung_inte[['CITE']]<- NULL
 GDTlung_inte[['GM']]<- NULL
+
+
+# integtation by seurat integration
+Adult_GDT_2020AUG
+l.Adult_GDT_2020AUG <- SplitObject(Adult_GDT_2020AUG, split.by = "patient")
+l.gdtlung <- SplitObject(GDTlung_inte, split.by = "patient")
+
+l.all <- c(l.Adult_GDT_2020AUG, l.gdtlung)
+
+l.all <-   lapply(X = l.all, FUN = function(x) {
+  # x  <- AddMetaData(x, t(x[['CITE']]@data)) 
+
+  x <- NormalizeData(x, verbose = FALSE)
+  x <- FindVariableFeatures(x, verbose = FALSE)
+})
+
+for (x in names(l.all))      {
+  
+  l.all[[x]]@assays$RNA@var.features %<>% str_subset('^HIST|^MT|^IG|^TRG|^TRD|^HSP|^RP', negate = T) 
+  
+}
+anchors <- FindIntegrationAnchors(object.list = l.all, 
+                                  dims = 1:50)
+GDT_Lung_BL<- IntegrateData(anchorset = anchors, dims = 1:50)
+
+DefaultAssay(GDT_Lung_BL) <- 'integrated'
+
+GDT_Lung_BL %<>% ScaleData( vars.to.regress = c(
+                                                "percent.mito",
+                                                    # 'project',
+                                                    "percent.ribo",
+                                                    'nCount_RNA',
+                                                    'nFeature_RNA' )) %>% 
+  RunPCA(npcs = 100, verbose = T,nfeatures.print = 40)
+
+ElbowPlot(GDT_Lung_BL,ndims = 100)
+
+GDT_Lung_BL <- RunUMAP(object = GDT_Lung_BL, dims = 1:50, 
+                           reduction = 'pca', min.dist = 0.2) %>%
+  FindNeighbors(dims = c(1:70))
+for (i in seq(0.6,1.6,0.1) %>% rev()) {
+  GDT_Lung_BL <- FindClusters(GDT_Lung_BL, resolution = i)
+}
+
+Feature_rast(GDT_Lung_BL, c('ident','tissue','project', 'big_cluster', 'v_gene_TRD', 'patient'), ncol = 3) 
+saveRDS(GDT_Lung_BL, 'GDT_Lung_BL_integrated_pb_and_lung.rds')
+saveRDS(GDTlung_s, 'GDTlung_newTCR_2021.0914.rds')
 # integration
 # GDT_lung_PB$tissue %>% unique
 
@@ -1202,64 +1440,65 @@ GDTlung_inte[['GM']]<- NULL
 # JackStrawPlot(GDTlung_s, dims = 1:50 ) %T>%
 #   figsave('GDT_lung_PB.jackstraw.pdf' , w = 400, h = 400)
 
-# integration by harmony --------------------------------------------------
-library(harmony)
-
-GDT_lung_PB<- merge(x = GDTlung_inte, y = Adult_GDT_2020AUG,add.cell.ids = c("lung", "bl" ), project = 'lb' )
-# GDT_lung_PB<- merge(x = Adult_GDT_2020AUG, y = GDT_2020AUG)
-dim(GDT_lung_PB)
-  
-
-GDT_lung_PB%<>% NormalizeData(verbose = FALSE, assay = 'RNA') %>% 
-  FindVariableFeatures(selection.method = 'vst', nfeatures = 3500) 
-
-
-GDT_lung_PB@assays$RNA@var.features %<>%str_subset('^TRG|^TRD|^TRB|^TRA|^MT|^IG|^MIR|^HSP', negate = T) #%T>% print(length())
-GDT_lung_PB@assays$RNA@var.features
-
-#%>% 
-GDT_lung_PB%<>%   ScaleData(verbose = FALSE, assay = 'RNA',    
-                        vars.to.regress = c('percent.mito',  'nCount_RNA','nFeature_RNA' )
-) %>% 
-  RunPCA(npcs = 100, verbose=T)
-GDT_lung_PB%<>% RunHarmony(c(  'patient', 'percent.mito',  'nCount_RNA','nFeature_RNA'), plot_convergence = TRUE)
-
-
-
-ElbowPlot(GDT_lung_PB, ndims = 50,reduction = 'harmony')
-
-saveRDS(GDT_lung_PB ,'GDT_lung_PB_harmony.rds')
-
-#chose 35 PCs 
-
-
-
-
-
-# dim reduce via harmony --------------------------------------------------------------
-
-
-
-
-GDT_lung_PB %<>% RunUMAP(reduction = 'harmony', dims = 1:30) %>% FindNeighbors(redcution = 'harmony', dims = 1:30)
-
-for (i in seq(0.6,1.5,0.1) %>% rev()) {
-  GDTlung <- FindClusters(GDTlung, resolution = i)
-}
-
-GDTlung %<>% CellCycleScoring( s.features = s.genes, g2m.features = g2m.genes, set.ident = F)
-
-
-Feature_rast(GDTlung, c('ident', 'tissue', 'patient'))
-
-ViolinPlot(GDTlung, c('nCount_RNA','percent.mito', 'percent.ribo'), colors = umap.colors)
-
-ClusterCompare(GDTlung, '3', '7')
-
-
-# Since by harmoony  we failed to achieve clear UMAP, we decide to stay with Seurat protocol
-saveRDS(GDTlung, 'GDTlung.harmony:integration.rds')#
-
+# # integration by harmony --------------------------------------------------
+# library(harmony)
+# 
+# GDT_lung_PB<- merge(x = GDTlung_inte, y = Adult_GDT_2020AUG,add.cell.ids = c("lung", "bl" ), project = 'lb' )
+# # GDT_lung_PB<- merge(x = Adult_GDT_2020AUG, y = GDT_2020AUG)
+# dim(GDT_lung_PB)
+#   
+# 
+# GDT_lung_PB%<>% NormalizeData(verbose = FALSE, assay = 'RNA') %>% 
+#   FindVariableFeatures(selection.method = 'vst', nfeatures = 3500) 
+# 
+# 
+# GDT_lung_PB@assays$RNA@var.features %<>%str_subset('^TRG|^TRD|^TRB|^TRA|^MT|^IG|^MIR|^HSP', negate = T) #%T>% print(length())
+# GDT_lung_PB@assays$RNA@var.features
+# 
+# #%>% 
+# GDT_lung_PB%<>%   ScaleData(verbose = FALSE, assay = 'RNA',    
+#                         vars.to.regress = c('percent.mito',  'nCount_RNA','nFeature_RNA' )
+# ) %>% 
+#   RunPCA(npcs = 100, verbose=T)
+# GDT_lung_PB%<>% RunHarmony(c(  'patient', 'percent.mito',  'nCount_RNA','nFeature_RNA'), plot_convergence = TRUE)
+# 
+# 
+# 
+# ElbowPlot(GDT_lung_PB, ndims = 50,reduction = 'harmony')
+# 
+# saveRDS(GDT_lung_PB ,'GDT_lung_PB_harmony.rds')
+# 
+# GDT_lung_PB <- readRDS('GDT_lung_PB_harmony.rds')
+# #chose 35 PCs 
+# 
+# 
+# 
+# 
+# 
+# # dim reduce via harmony --------------------------------------------------------------
+# 
+# 
+# 
+# 
+# GDT_lung_PB %<>% RunUMAP(reduction = 'harmony', dims = 1:30) %>% FindNeighbors(redcution = 'harmony', dims = 1:30)
+# 
+# for (i in seq(0.6,1.5,0.1) %>% rev()) {
+#   GDTlung <- FindClusters(GDTlung, resolution = i)
+# }
+# 
+# GDTlung %<>% CellCycleScoring( s.features = s.genes, g2m.features = g2m.genes, set.ident = F)
+# 
+# 
+# Feature_rast(GDTlung, c('ident', 'tissue', 'patient'))
+# 
+# ViolinPlot(GDTlung, c('nCount_RNA','percent.mito', 'percent.ribo'), colors = umap.colors)
+# 
+# ClusterCompare(GDTlung, '3', '7')
+# 
+# 
+# # Since by harmoony  we failed to achieve clear UMAP, we decide to stay with Seurat protocol
+# saveRDS(GDTlung, 'GDTlung.harmony:integration.rds')#
+# 
 
 # Figs --------------------------------------------------------------------
 
@@ -1273,9 +1512,26 @@ umap_idnet_lunggdt <- Feature_rast(GDTlung_s, c('ident'), noaxis = F, labelsize 
   theme(plot.title = element_text(size = 12, face = 'plain'))
 
 
+barplot(101:123, col = umap.colors, names.arg = 1:23)
 
-vg9d2 <- Feature_rast(GDTlung_s, 'Vg9Vd2', colorset = c('red', 'yellow'),labelsize = 12)+ggtitle('γδTCR')+
+
+vg9d2 <- Feature_rast(GDTlung_s, 'Vg9Vd2', colorset =umap.colors[c(7, 21)],do.label = F, noaxis = F, mythe = F)+ggtitle('γδTCR')+
   theme(plot.title = element_text(size = 12, face = 'plain'))
+tissueUMAP <- Feature_rast(GDTlung_s, 'tissue', do.label = F, noaxis = F, mythe = F, sz = 0.5)+scale_color_manual(labels = c('LN', 'Lung'), values = umap.colors)+
+  theme(plot.title = element_text(size = 12, face = 'plain'))
+
+
+
+
+GM_D <- Feature_rast(GDTlung_s, 'GM_D', do.label = F, noaxis = F, color_grd = 'grd', mythe = F)+ggtitle('Gene module: type-3 immunity')+
+  theme(plot.title = element_text(size = 12, face = 'plain'))
+
+
+PG(list(vg9d2,tissueUMAP, GM_D), ncol = 3, rw = c(1, 0.85, 0.85)) %T>% figsave('Vg9Vd2areType3.v2.pdf', 220, 80) 
+
+
+
+Feature_rast(GDTlung_s, 'GM_G', do.label = F, noaxis = T, color_grd = 'grd')
 
 
 GMD_vio <- ViolinPlot(GDTlung_s, 'GM_D', colors = umap.colors, box = T)+ggtitle('Gene module: type-3 immunity')+
@@ -1283,6 +1539,11 @@ GMD_vio <- ViolinPlot(GDTlung_s, 'GM_D', colors = umap.colors, box = T)+ggtitle(
 
 
 PG(list(umap_idnet_lunggdt, vg9d2, GMD_vio), ncol = 3) %T>% figsave('Vg9Vd2areType3', 200, 80) 
+
+GDTlung_s$public_TRD
+
+
+Feature_rast(GDTlung_s, 'public_TRD', colorset = umap.colors[c(21, 5,11,6)], do.label = F)
 
 GDT_2020AUG <- readRDS('/home/big/tanlikai/Human_GDT_2019/Integrated/GDT_2020AUG_woCOV.rds')
 
@@ -1377,3 +1638,6 @@ GDTlung_s@meta.data %>% top_n(1000,cdr3_TRD_freq) %>% pull(cdr3_TRG) %>% unique(
 GDTlung_s@meta.data %>% top_n(1000,cdr3_TRD_freq) %>% filter(!is.na(cdr3_paired)) %>% arrange(cdr3_TRD) %>% 
   select(cdr3_TRD, cdr3_TRD_freq, cdr3_TRG, cdr3_TRG_freq) %>% distinct()
 
+
+
+DoHeatmap(GDTlung_s, c('CCR6', 'DPP4', 'KLRB1', 'RORC', 'IL23R', 'BLK', 'ZBTB16')) %>% heat_theme()

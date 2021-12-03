@@ -1073,7 +1073,8 @@ TCRdirs <- list.dirs(path = 'raw') %>% str_subset('VDJ.+outs$' )
 # remove patient 31
 TCRdirs <- TCRdirs[c(1:5,7)]
 
-TCRs <- map2(TCRdirs, 1:6, ~ read.csv(paste0(.x, '/filtered_contig_annotations.csv' ))%>% 
+TCRs <- map2(TCRdirs, 1:6, ~  rbind(read.csv(paste0(.x, '/filtered_contig_annotations.csv' )),
+                                    read.csv(paste0(.x, '/filtered_contig_annotations_2.csv' )))%>% 
                filter(productive == 'True'& is_cell == 'True') %>%
                dplyr::select(c(1, 5:10, 13,14))  %>%
                mutate( patient = pt[[.y]],  
@@ -1122,7 +1123,7 @@ TCRs_paired %<>%  left_join(cdr3TRA_freq, by = c('cdr3_TRA','patient')) %>%
 
 TCRs_paired %>% head()
 
-saveRDS(TCRs_paired, 'abTCR.RDS')
+saveRDS(TCRs_paired, 'abTCR_new.RDS')
 
 # join the data 
 CD4CD8$bc_backup <- rownames(CD4CD8@meta.data)
@@ -1144,11 +1145,11 @@ Feature_rast(CD4CD8, 'cdr3_paired_perc',sz = 0.5)+
                           low = "#00ccff",midpoint = 1,
                          mid = 'purple', 
                          high = "#ff0066"   )
-Feature_rast(CD4CD8, c('cdr3_TRB_perc', 'tissue'), color_grd = 'grd', facet = 'patient')
+Feature_rast(CD4CD8, c('cdr3_TRB_perc', 'tissue'), color_grd = 'grd', facets = 'patient')
 
 
 
-qsaveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0924.rds')
 dim(CD4CD8@assays$RNA@counts)
 
 # TCR analysis -----------------------------------------------------------
@@ -1165,7 +1166,7 @@ table(CD4CD8$TCR_summary)
 
 TCRmapping <- CD4CD8@meta.data %>% group_by(tissue, patient) %>%  count(TCR_summary) %>% 
   mutate(percent = n/sum(n)*100)
- (ggplot(TCRmapping,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+mytheme) %T>% figsave('mappingrate_TCR.pdf', 150, 60)
+ (ggplot(TCRmapping,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+mytheme) %T>% figsave('mappingrate_TCR.new.pdf', 150, 60)
 
 
 # TCR clonal expansion ----------------------------------------------------
@@ -1181,7 +1182,7 @@ TCRabclonality_pt <-   map(patientID,~ CD4CD8 %>% subset(patient %in% .x) %>%
 TCRabclonality_fig <- PG(list(TCRabclonality_allcell, TCRabclonality_pt)) %T>% figsave('TCRabclonality_fig.pdf', 180, 100)
 
 PG(list(TCRabclonality_allcell, TCRabclonality_pt))
-saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0924.rds')
 
 
 CD4CD8$cdr3_paired_freq

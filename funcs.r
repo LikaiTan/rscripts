@@ -74,9 +74,10 @@ gglp <- function(p = 'n', s= 3) {
 
 
 
-ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|^RP", test = 'bimod',
-                           p_cutoff = 0.05,
+ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|^RP", test = 'bimod', 
+                           p_cutoff = 0.05, assay = 'RNA', do.plot = TRUE, group.colors = NULL,
                            min.pct = 0.15, genetoshow = 50, ds = 500) {
+  DefaultAssay(ob) <- assay
     if (!is.null(group.by)) {
       Idents(ob) <- ob[[group.by]]
     }
@@ -92,16 +93,21 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|
       dplyr:: filter(!grepl(rm, gene) )
 
   print(result$table)
-  result$plot <- DoHeatmap(subset(ob, idents = c(id1, id2), downsample = ds),
-                           raster = T,size = gs(8),
-                           features = result$table[c(1:(genetoshow/2),
-                                                     (nrow(result$table)-(genetoshow/2-1)):nrow(result$table)
-                           ),]$gene)+
-    theme(text = element_text(size = 8), axis.text = element_text(size = 8),
-          legend.key.width = unit(2,'mm'),
-          axis.text.y = element_text(face = 'italic'))+mytheme+
-    scale_fill_gradient2(low = 'blue', mid = 'white',  high = "red")+
-    guides(color = FALSE)
+  
+  if (do.plot == TRUE) {
+    result$plot <- DoHeatmap(subset(ob, idents = c(id1, id2), downsample = ds),
+                             raster = T,size = gs(8),group.colors = group.colors,
+                             features = result$table[c(1:(genetoshow/2),
+                                                       (nrow(result$table)-(genetoshow/2-1)):nrow(result$table)
+                             ),]$gene)+
+      theme(text = element_text(size = 8), axis.text = element_text(size = 8),
+            legend.key.width = unit(2,'mm'),
+            axis.text.y = element_text(face = 'italic'))+mytheme+
+      scale_fill_gradient2(low = 'blue', mid = 'white',  high = "red")+
+      guides(color = FALSE)
+  }
+  
+
   # print(result$plot)
   return(result)
 }
@@ -137,7 +143,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|
 # axis number:  whether or not to lable the axis numbers
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
-Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8, 
+Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
                          mythe =T, titleface = 'italic',colorset = c('um','gg'), color_grd = c('threecolor','grd'),
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
@@ -412,11 +418,12 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
 #' function to produce entrezlist compareing two seurat cluster
 #' entrezlist_generator()
 
-entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db')) {
+entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db'),rm = "^MT|^RP") {
   logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2,
                            test.use = 'bimod',logfc.threshold = 0, 
                            only.pos = F,  min.pct = 0.1) %>%
-    tibble::rownames_to_column('SYMBOL') %>% dplyr::arrange(desc(avg_log2FC))
+    tibble::rownames_to_column('SYMBOL') %>% dplyr::arrange(desc(avg_log2FC)) %>%
+    dplyr:: filter(!grepl(rm, SYMBOL) )
   logfclist <- clusterProfiler::bitr(logfclist$SYMBOL, fromType="SYMBOL",
                     toType="ENTREZID", OrgDb=OrgDB) %>%
     right_join(logfclist, by = 'SYMBOL')
@@ -555,4 +562,19 @@ fill_m <- function(color = umap.colors, al =1, na = alpha('lightgrey',0.5),label
   scale_fill_manual(values = alpha(color, al), na.value = na,labels = labels)
 }
 ?scale_fill_manual
+
+
+# options(future.fork.enable = TRUE)
+# options(future.globals.maxSize= 6012896000)
+# future::plan(strategy = "multicore", workers = 40)
+
+
+multicores <- function(core=40, mem = 100, strategy = 'multicore') {
+  options(future.fork.enable = TRUE)
+  options(future.globals.maxSize= mem*1024^3)
+  future::plan(strategy = strategy, workers = core)
+}
+
+multicores(mem = 200)
+
 

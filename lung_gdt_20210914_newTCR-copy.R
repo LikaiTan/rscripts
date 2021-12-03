@@ -19,7 +19,7 @@ library(xlsx)
 # library(rstatix)
 library(stringr)
 library(magrittr)
-library(openxlsx)
+
 library(harmony)
 # themes and functions ------------------------------------------------------------------
 source('/home/big/tanlikai/script/rscripts/funcs.r')
@@ -670,22 +670,33 @@ GM_score_heat
 
 TCRdirs <- list.dirs(path = 'raw') %>% str_subset('VDJ.+outs$' )
 
+read.csv('raw/VDJ_322_325_453_456_gd/outs/filtered_contig_annotations*.csv')
 
 
-lung1TCR <- read.csv('raw/VDJ_Falk1_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_1"))
-
-lung2_3TCR <- read.csv('raw/VDJ_322_325_453_456_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_2"))
-
-lung4_6TCR <- read.csv('raw/VDJ_falk3_gd/outs/all_contig_annotations.csv') %>% 
-  filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
-  dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_3"))
 
 
-lungTCR <- rbind(lung1TCR, lung2_3TCR,lung4_6TCR) %>% select(-barcode)
+TCRs <- map2(TCRdirs, c(2,1,3), ~ rbind(read.csv(paste0(.x, '/filtered_contig_annotations.csv' )),
+                                        read.csv(paste0(.x, '/filtered_contig_annotations_p2.csv' )))%>% 
+               filter(productive == 'True'& is_cell == 'True'& grepl('GV|DV', v_gene)) %>%
+               dplyr::select(c(1, 5:10, 13,14))  %>%
+               mutate(  
+                       bc_backup = paste0(barcode, "_",.y)   ) %>% dplyr::select(-barcode)) %>% reduce(.f = rbind)
+TCRs
+# 
+# lung1TCR <- read.csv('raw/VDJ_Falk1_gd/outs/all_contig_annotations.csv') %>% 
+#   filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
+#   dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_1"))
+# 
+# lung2_3TCR <- read.csv('raw/VDJ_322_325_453_456_gd/outs/all_contig_annotations.csv') %>% 
+#   filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
+#   dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_2"))
+# 
+# lung4_6TCR <- read.csv('raw/VDJ_falk3_gd/outs/all_contig_annotations.csv') %>% 
+#   filter(productive == 'True' & grepl('GV|DV', v_gene))%>%
+#   dplyr::select(c(1, 5:10, 13,14)) %>% mutate(bc_backup = paste0(barcode, "_3"))
+# 
+# 
+# lungTCR <- rbind(lung1TCR, lung2_3TCR,lung4_6TCR) %>% select(-barcode)
 
 
 TRGs <- lungTCR %>% filter(grepl('GV', v_gene))%>% distinct(bc_backup, .keep_all = T) %>% 
