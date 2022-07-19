@@ -1,5 +1,5 @@
 
-# lung CD4 and CD8 project
+# Pulm CD4 and CD8 project
 library(Seurat)
 library(ggplot2)
 library(purrr)
@@ -9,7 +9,7 @@ library(tibble)
 library(cowplot)
 library(ggrastr)
 library(Cairo)
-
+library(Nebulosa)
 library(ggrepel)
 library(openxlsx)
 library(stringr)
@@ -17,39 +17,35 @@ library(magrittr)
 # themes and functions ------------------------------------------------------------------
 source('/home/big/tanlikai/script/rscripts/funcs.r')
 
-# file.edit('//home/big/tanlikai/script/rscripts/funcs.r')
+file.edit('//home/big/tanlikai/script/rscripts/funcs.r')
 
 multicores()
 
 
 #paralell computation
 
-# work dir ----------------------------------------------------------------
+# work dir ----------------------------------------------------------thx
+
 setwd('/home/big/tanlikai/Lung/abt')
+CD4CD8RDS <- 'CD4CD8_integrated_2022_8p.rds'
+CD4CD8 <- readRDS(CD4CD8RDS)
 
-CD4CD8 <- readRDS('CD4CD8_integrated_2021_0716.rds')
-
-Feature_rast(CD4CD8)
 # read_rawdata ---------------------------------------------------------------
 
 # directories to raw gene expression and CITEseq data
 
-dirs <- list.dirs(path = 'raw') %>% str_subset('surface.+outs$' )
+dirs <- list.dirs(path = 'raw') %>% str_subset('surface.+outs$' ) %>% grep(314, . ,value = T,invert = T)
 
-dirs
 
-proj <- c('p32', 'p45','p25_CD4', 'p25_CD8','p27','p31','p71')
-pt <- c('p32', 'p45','p25', 'p25','p27','p31','p71')
+
+proj <- c('p32', 'p45','p73', 'p77', 'p25_CD4', 'p25_CD8','p27','p71')
+pt <- c('p32', 'p45','p73', 'p77','p25', 'p25','p27','p71')
 
 # read raw GEX and CITEseq data 
 rawdata <- dirs %>% map(~ Read10X_h5(paste0(.x, '/filtered_feature_bc_matrix.h5')) ) %>% setNames(proj)
-# The quality of p31 is very poor, so we need remove it.
-rawdata$p31 <- NULL
-proj <- c('p32', 'p45','p25_CD4', 'p25_CD8','p27','p71')
-pt <- str_extract(proj, 'p\\d\\d')
 # creat seurat project of gene expression datasepeately into a big list
 
-lungTcell <- map2(rawdata,proj, ~
+PulmTcell <- map2(rawdata,proj, ~
                    CreateSeuratObject(counts = .x$`Gene Expression`,project = .y,
                                        min.features = 20) %>% 
                     AddMetaData(str_extract(.y, 'p\\d\\d'),col.name = 'patient')
@@ -58,21 +54,16 @@ lungTcell <- map2(rawdata,proj, ~
 
 
 
+map(PulmTcell, ~ .@meta.data %>% colnames )
+map(PulmTcell, ~ .@meta.data %>% ncol )
 
+map(PulmTcell, ~ dim(.))
 
-
-map(lungTcell, ~ .@meta.data %>% colnames )
-map(lungTcell, ~ .@meta.data %>% ncol )
-
-map(lungTcell, ~ dim(.))
-
-# the data quality of p31 is very poor, thus need to be removed 
-lungTcell$p31 <- NULL
 
 # demultiplexing ----------------------------------------------------------
 
 
-
+rawdata
 #  citeseq and hashtaq data
 
 hash <- unlist(map(rawdata, ~ .$`Antibody Capture` %>% rownames )) %>%  str_subset('^\\d_')
@@ -84,115 +75,191 @@ cite
 # integrate HTO and CITESEQdata into seurat projects 
 
 for (x in proj) {
-  lungTcell[[x]][['HTO']] <- CreateAssayObject(rawdata[[x]]$`Antibody Capture`[intersect(hash, rownames(rawdata[[x]]$`Antibody Capture`)),])
-  lungTcell[[x]][['CITE']] <- CreateAssayObject(rawdata[[x]]$`Antibody Capture`[intersect(cite, rownames(rawdata[[x]]$`Antibody Capture`)),])
-  rownames(lungTcell[[x]][['HTO']]@counts) <- paste0('X',rownames(lungTcell[[x]][['HTO']]@counts) )
-  rownames(lungTcell[[x]][['HTO']]@data) <- paste0('X',rownames(lungTcell[[x]][['HTO']]@data) )
-  
+  PulmTcell[[x]][['HTO']] <- CreateAssayObject(rawdata[[x]]$`Antibody Capture`[intersect(hash, rownames(rawdata[[x]]$`Antibody Capture`)),])
+  PulmTcell[[x]][['CITE']] <- CreateAssayObject(rawdata[[x]]$`Antibody Capture`[intersect(cite, rownames(rawdata[[x]]$`Antibody Capture`)),])
+
   
 }
+
+PulmTcell$p32@assays$CITE
+
 
 # change names of HTO to more recognizable names 
 
 for (x in proj) {
-  rownames(lungTcell[[x]][['HTO']]@counts) %<>% str_extract('(?<=\\w-).+') %>% str_extract('(?<=\\w-).+') %>% paste0('S',.)
-  rownames(lungTcell[[x]][['HTO']]@data)%<>% str_extract('(?<=\\w-).+') %>% str_extract('(?<=\\w-).+')%>% paste0('S',.)
+  rownames(PulmTcell[[x]][['HTO']]@counts) %<>% str_extract('(?<=\\w-).+') %>% str_extract('(?<=\\w-).+') %>% paste0('S',.)
+  rownames(PulmTcell[[x]][['HTO']]@data)%<>% str_extract('(?<=\\w-).+') %>% str_extract('(?<=\\w-).+')%>% paste0('S',.)
   
   
 }
 
-hash_sample <- lungTcell %>% map(~ .[['HTO']] %>% rownames)
+hash_sample <- PulmTcell %>% map(~ .[['HTO']] %>% rownames)
 hash_sample
-lungTcell$p32@assays$HTO@counts
+PulmTcell$p32@meta.data
 
 # normalization
 for (i in proj) {
-  lungTcell[[i]] %<>%  NormalizeData( assay = "HTO", normalization.method = "CLR") %>% 
-    ScaleData(assay='HTO', features = rownames( .[['HTO']])) %>% 
+  PulmTcell[[i]] %<>%  NormalizeData( assay = "HTO", normalization.method = "CLR") %>% 
+    ScaleData(assay='HTO', features = rownames( .[['HTO']]), vars.to.regress= 'nCount_HTO') %>% 
     HTODemux( assay = "HTO", positive.quantile = 0.9, nstarts = 20)
 }
 
 
 for (i in proj) {
-  lungTcell[[i]] %<>%  NormalizeData( assay = "CITE", normalization.method = "CLR") 
+  PulmTcell[[i]] %<>%  NormalizeData( assay = "CITE", normalization.method = "CLR") %>% 
+    ScaleData(assay='CITE', features = rownames( .[['CITE']]), vars.to.regress= 'nCount_CITE') 
+    
 }
 
 
-map(lungTcell, ~ .@meta.data %>% colnames )
-map(lungTcell, ~ .@meta.data %>% ncol )
+map(PulmTcell, ~ .@meta.data %>% colnames )
+map(PulmTcell, ~ .@meta.data %>% ncol )
 
 for (x in proj) {
-  DefaultAssay(lungTcell[[x]] ) <- 'HTO'
+  DefaultAssay(PulmTcell[[x]] ) <- 'HTO'
 }
 
-saveRDS(lungTcell,'lungTcell_pre_inte.rds')
+saveRDS(PulmTcell,'lungTcell_pre_inte.rds')
 
-lungTcell <- readRDS('lungTcell_pre_inte.rds')
+PulmTcell <- readRDS('lungTcell_pre_inte.rds')
 
 
 
-lungTcell$p32$hash.ID
-map2(lungTcell,hash_sample,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]], assay = 'HTO',
+PulmTcell$p32$hash.ID
+map2(PulmTcell,hash_sample,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]], assay = 'HTO',
                                              g = 'hash.ID',noaxis =F, axis.number=T)+
-       xlim(0,5)+ylim(0,5)+
-       geom_hline(yintercept = 0.5)+
-       geom_vline(xintercept = 0.8)) %>% PG(ncol =6) %T>%
+       # xlim(0,5)+ylim(0,5)+
+       geom_hline(yintercept = 0.65)+
+       geom_vline(xintercept = 0.7)) %>% PG(ncol =4) %T>%
   figsave('hash.id.automatic.pdf', 400, 100)
-Feature_rast(lungTcell$p32, 'hash.ID')
 
 # the automiatic demultiplexing by seurat is not very accurate 
 
 # add HTO to metadata
 
 for (x in proj) {
- lungTcell[[x]]  %<>% AddMetaData(t(lungTcell[[x]]@assays$HTO@data), col.name = rownames(lungTcell[[x]]@assays$HTO@data))
+ PulmTcell[[x]]  %<>% AddMetaData(t(PulmTcell[[x]]@assays$HTO@data), col.name = rownames(PulmTcell[[x]]@assays$HTO@data))
 }
 
 for (x in proj) {
-  lungTcell[[x]]  %<>% AddMetaData( rownames(lungTcell[[x]]@meta.data), 
+  PulmTcell[[x]]  %<>% AddMetaData( rownames(PulmTcell[[x]]@meta.data), 
                                     col.name = 'bc_backup')
 }
 
+PulmTcell$p73@meta.data<- PulmTcell$p73@meta.data[,c(1:14, 16,15, 17)] 
+
+PulmTcell$p77@meta.data<- PulmTcell$p77@meta.data[,c(1:14, 16,15, 17)] 
+
+
+
+
+PulmTcell$p32@assays$HTO@data %>% rownames()
 
 #  demultiplexing manually
 
-map(lungTcell,~ ncol(.x@meta.data)
+aa<- map(PulmTcell,~ rownames(.@assays$HTO@data)
     )
+
+
+bb<- map(PulmTcell,~     colnames(.@meta.data)[15:16]
+
+)
+
+map2(aa, bb, ~ .x == .y)
 
 syms(hash_sample)
 newmeta <- list()
 
 # marker tissues based on HTO
-
-newmeta <- map(lungTcell,  ~
-                .x@meta.data  %<>%     
-                  mutate(tissue = case_when(.[[15]] >= 0.8 & .[[16]] < 0.5 ~ 'lung',
-                                            .[[15]]  < 0.8 & .[[16]] >= 0.5 ~ 'luLN',
-                                            .[[15]]  >= 0.8 & .[[16]] >= 0.5 ~ 'DP'))%>%
-  `rownames<-`(.x$bc_backup)
-)
-                
-newmeta$p32  %<>%    
-  mutate(tissue = case_when(.[[15]] >= 0.8 & .[[16]] < 0.5 ~ 'luLN',
-                            .[[15]]  < 0.8 & .[[16]] >= 0.5 ~ 'lung',
-                            .[[15]]  >= 0.8 & .[[16]] >= 0.5 ~ 'DP'))%>%
-  `rownames<-`(.$bc_backup)
-  
-for (i in proj) {
-  lungTcell[[i]]@meta.data <- newmeta[[i]]
+for (x in proj) {
+  DefaultAssay(PulmTcell[[x]] ) <- 'RNA'
 }
 
-map2(lungTcell,hash_sample,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]],
+map2(PulmTcell,bb,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]], assay = 'RNA',
+                                    g = 'hash.ID',noaxis =F, axis.number=T)+
+       # xlim(0,5)+ylim(0,5)+
+       geom_hline(yintercept = 0.65)+
+       geom_vline(xintercept = 1)) %>% PG(ncol =4)%T>%
+  figsave('hash.id.automatic.pdf', 400, 100)
+
+
+
+
+newmeta <- map(PulmTcell,  ~
+                .x@meta.data  %<>%     
+                  mutate(tissue = case_when(.[[15]] >= 1 & .[[16]] < 0.55 ~ 'Pulm',
+                                            .[[15]]  < 1 & .[[16]] >= 0.65 ~ 'LN',
+                                            .[[15]]  >= 1 & .[[16]] >= 0.65 ~ 'DP'))%>%
+  `rownames<-`(.x$bc_backup)
+)
+
+
+newmeta$p32  %<>%    
+  mutate(tissue = case_when(.[[15]] >= 1 & .[[16]] < 0.55 ~ 'LN',
+                            .[[15]]  < 1 & .[[16]] >= 0.65 ~ 'Pulm',
+                            .[[15]]  >= 1 & .[[16]] >= 0.65 ~ 'DP'))%>%
+  `rownames<-`(.$bc_backup)
+
+
+map2(newmeta,bb,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]], 
+                                    g = 'tissue',noaxis =F, axis.number=T)+
+       # xlim(0,5)+ylim(0,5)+
+       geom_hline(yintercept = 0.7)+
+       geom_vline(xintercept = 1)) %>% PG(ncol =4)
+
+
+# newmeta$p77  %<>%    
+#   mutate(tissue = case_when(.[[15]] >= 1 & .[[16]] < 0.7 ~ 'LN',
+#                             .[[15]]  < 1 & .[[16]] >= 0.7 ~ 'Pulm',
+#                             .[[15]]  >= 1 & .[[16]] >= 0.7 ~ 'DP'))%>%
+#   `rownames<-`(.$bc_backup)
+# 
+# 
+# 
+# newmeta$p73  %<>%    
+#   mutate(tissue = case_when(.[[15]] >= 0.6 & .[[16]] < 0.8 ~ 'LN',
+#                             .[[15]]  < 0.6 & .[[16]] >= 1 ~ 'Pulm',
+#                             .[[15]]  >= 0.6 & .[[16]] >= 1 ~ 'DP'))%>%
+#   `rownames<-`(.$bc_backup)
+# 
+# newmeta$p25_CD8 %<>%    
+#   mutate(tissue = case_when(.[[15]] >= 1 & .[[16]] < 0.5 ~ 'Pulm',
+#                             .[[15]]  < 1 & .[[16]] >= 1 ~ 'LN',
+#                             .[[15]]  >= 1 & .[[16]] >= 0.7 ~ 'DP'))%>%
+#   `rownames<-`(.$bc_backup)
+# 
+# 
+# newmeta$p71 %<>%    
+#   mutate(tissue = case_when(.[[15]] >= 1 & .[[16]] < 0.3 ~ 'Pulm',
+#                             .[[15]]  < 1.2 & .[[16]] >= 0.5 ~ 'LN',
+#                             .[[15]]  >= 1 & .[[16]] >= 0.5 ~ 'DP'))%>%
+#   `rownames<-`(.$bc_backup)
+# 
+# newmeta$p32  %<>%
+#   mutate(tissue = case_when(.[[15]] >= 0.8 & .[[16]] < 0.5 ~ 'LN',
+#                             .[[15]]  < 0.8 & .[[16]] >= 0.5 ~ 'Pulm',
+#                             .[[15]]  >= 0.8 & .[[16]] >= 0.5 ~ 'DP'))%>%
+#   `rownames<-`(.$bc_backup)
+# 
+# map2(newmeta,hash_sample,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]], assay = 'HTO',
+#                                              g = 'tissue',noaxis =F, axis.number=T)+
+#        # xlim(0,5)+ylim(0,5)+
+#        geom_hline(yintercept = 0.7)+
+#        geom_vline(xintercept = 1)) %>% PG(ncol =4)
+#                 
+  
+for (i in proj) {
+  PulmTcell[[i]]@meta.data <- newmeta[[i]]
+}
+
+map2(newmeta,bb,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]],
                                              g = 'tissue',noaxis =F, axis.number=T)+
-       ggtitle(unique(.x$orig.ident))+
-       xlim(0,5)+ylim(0,5)+
-       geom_hline(yintercept = 0.5)+
-       geom_vline(xintercept = 0.8)) %>% PG(ncol =6) %T>%
-  figsave('hash.id.mannual.pdf', 400, 100)
+       ggtitle(unique(.x$orig.ident))) %>% PG(ncol =4) %T>%
+  figsave('hash.id.mannual.pdf', 400, 200)
 
 
 for (x in proj) {
-  DefaultAssay(lungTcell[[x]] ) <- 'RNA'
+  DefaultAssay(PulmTcell[[x]] ) <- 'RNA'
 }
 
 
@@ -202,54 +269,48 @@ for (x in proj) {
 
 s.genes <- cc.genes$s.genes
 g2m.genes <- cc.genes$g2m.genes
-lungTcell$p32$percent.ribo
 
 # calculate percent of mitochondrial  ribosam  and hspa genes
 
-lungTcell <- map(lungTcell, ~ PercentageFeatureSet(.x, '^MT', col.name =  'percent.mito') %>% 
-             PercentageFeatureSet('^RP', col.name = 'percent.ribo')    %>% 
-  PercentageFeatureSet('^HSPA', col.name =  'percent.hspa') )
+PulmTcell <- map(PulmTcell, ~ PercentageFeatureSet(.x, '^MT', col.name =  'percent.mito') %>% 
+             PercentageFeatureSet('^RP', col.name = 'percent.ribo') )  
+PulmTcell$p32$tissue
   
 # QC plot
 
-QCvio <- map(lungTcell, ~ViolinPlot(.x,c("nFeature_RNA", "nCount_RNA",'percent.mito'),group.by = 'tissue',
-                                colors =umap.colors  ,box = T, jitter = T , ncol = 3  )) %>% 
-    PG(labels = proj, ncol = 1) %T>%
-  figsave('beforeQC_violin.pdf', 150, 270)
+QCvio <- map(PulmTcell, ~ViolinPlot(.x,c("nFeature_RNA", "nCount_RNA",'percent.mito'),group.by = 'tissue',
+                                colors =umap.colors  ,box = T, jitter = F , ncol = 3  )) %>% 
+    PG(labels = proj, ncol = 2) %T>% 
+  figsave('beforeQC_violin.pdf',300, 250)
 
   QCvio
-
-  figsave(QCvio,'beforeQC_violin_CD4CD8.pdf', 200, 200)
   
-
-QC_scatter <- map(lungTcell, ~ Feature_rast(.x, g = 'percent.mito', d1 ="nCount_RNA",d2 ='nFeature_RNA', 
+  
+QC_scatter <- map(PulmTcell, ~ Feature_rast(.x, g = 'percent.mito', d1 ="nCount_RNA",d2 ='nFeature_RNA', 
                                       noaxis = F, axis.number = T)+grd+
                     geom_smooth(method = "lm")+
                     
                     scale_x_continuous(breaks = seq(0, 10000, 1000), limits = c(0,10000))+
                     scale_y_continuous(breaks = seq(0, 5000, 500), limits = c(0,5000))+
-                    geom_hline(yintercept = c(400,2000))+geom_vline(xintercept = c(1200,7000)))  %>% 
-  PG(labels = proj)%T>%
-  figsave('beforeQC_scatter.pdf',600,400)
+                    geom_hline(yintercept = c(600,2000))+geom_vline(xintercept = c(1000,6000)))  %>% 
+  PG(labels = proj, ncol = 2)%T>%
+  figsave('beforeQC_scatter.pdf',600,600)
 QC_scatter
 
-figsave(QC_scatter,'beforeQC_scatter.pdf',600,300)
 
-
-saveRDS(lungTcell, 'lungTcell_pre_inte.rds')
 # data cleaning 
 for (x in proj) {
-  lungTcell[[x]] <- subset(lungTcell[[x]], subset =  nCount_RNA %in% 1200:7000 &
-                       nFeature_RNA %in% 400:2000 &  percent.mito <15 &
-                       tissue %in% c('lung','luLN'))
+  PulmTcell[[x]] <- subset(PulmTcell[[x]], subset =  nCount_RNA %in% 1000:6000 &
+                       nFeature_RNA %in% 600:2000 &  percent.mito <15 &
+                       tissue %in% c('Pulm','LN'))
 }
-QCvio_clean <- map(lungTcell, ~ViolinPlot(.x,c("nFeature_RNA", "nCount_RNA",'percent.mito'),group.by = 'tissue',
+QCvio_clean <- map(PulmTcell, ~ViolinPlot(.x,c("nFeature_RNA", "nCount_RNA",'percent.mito'),group.by = 'tissue',
                               colors =umap.colors  ,box = T, jitter = T , ncol = 3  )) %>% 
   PG(labels = proj, ncol = 2) %T>%
   figsave('afterQC_violin_CD4CD8.pdf',200,270)
 QCvio_clean
 
-map(lungTcell,~ dim(.x))
+map(PulmTcell,~ dim(.x))
 
 
 
@@ -263,36 +324,78 @@ map(lungTcell,~ dim(.x))
 # normalization and scaling -----------------------------------------------
 # scale and find high var genes 
 
-lungTcell %<>% map(~   NormalizeData(.x, normalization.method = 'LogNormalize',
+
+PulmTcell %<>% map(~   NormalizeData(.x, normalization.method = 'LogNormalize',
                                scale.factor = 10000, assay = 'RNA')%>% 
                      CellCycleScoring( s.features = s.genes, g2m.features = g2m.genes, set.ident = F) %>%
+                     FindVariableFeatures(assay = 'RNA',nfeatures = 3500, selection.method = 'vst')  %>% 
+
                      ScaleData( assay = 'RNA',
                                 vars.to.regress = c("percent.mito",
-                                                    "S.Score", 'G2M.Score',
+                                                    "S.Score", 
+                                                    'G2M.Score',
                                                     "percent.ribo",
-                                                    'nCount_RNA','nFeature_RNA' )) %>%
-                     FindVariableFeatures(assay = 'RNA',nfeatures = 3000, selection.method = 'vst') )
-lungTcell$p32@assays$RNA@var.features
+                                                    # 'nCount_RNA',
+                                                    'nFeature_RNA' )) )
+PulmTcell$p32@assays$RNA@scale.data
+
+
 for (x in proj) {
-  lungTcell[[x]]@assays$RNA@var.features <- lungTcell[[x]]@assays$RNA@var.features%>%  
-    str_subset('^RP|^MT|^HIST', negate = T)
+  PulmTcell[[x]]@assays$RNA@var.features <- PulmTcell[[x]]@assays$RNA@var.features%>%  
+    str_subset('^RP|^MT|^HIST|^TRA|^TRB|^HSP', negate = T)
 }
 
-saveRDS(lungTcell, 'lungTcell_pre_inte.rds')
+saveRDS(PulmTcell, 'lungTcell_pre_inte.rds')
 
-map(lungTcell, ~ .x@assays$RNA@var.features %>% length() )
+map(PulmTcell, ~ .x@assays$RNA@var.features %>% length() )
 
 # integration -------------------------------------------------------------
-anchors <- FindIntegrationAnchors(lungTcell, dims = 1:60)
+anchors <- FindIntegrationAnchors(PulmTcell, dims = 1:60)
 
 CD4CD8 <- IntegrateData(anchors, dims = 1:60)
+
+# dimensional reduction by PCA and UMAP -----------------------------------
+
+
+DefaultAssay(CD4CD8) <- "integrated"
+# scale data and run PCA
+CD4CD8 %<>% ScaleData( vars.to.regress = c('patient', 
+                                           "percent.mito",
+                                                   "S.Score",
+                                                   'G2M.Score',
+                                                   "percent.ribo",
+                                                   # 'nCount_RNA',
+                                                   'nFeature_RNA' )) %>% 
+  RunPCA(npcs = 100, verbose = T,nfeatures.print = 40)
+
+
+
+
+ElbowPlot(CD4CD8, ndims = 50)
+
+# jackstraw is a way to choose significant PCs
+# CD4CD8 %<>% JackStraw( num.replicate = 100, dims = 80)%>%
+#   ScoreJackStraw(dims = 1:80) 
+# CD4CD8 %>% JackStrawPlot( dims = 1:50 ) %T>%
+#   figsave('CD4CD8_Pulm_5p.jackstraw.pdf' , w = 400, h = 400)
+
+CD4CD8 <- RunUMAP(object = CD4CD8, dims = 1:43, 
+                   reduction = 'pca', min.dist = 0.2) %>%
+  FindNeighbors(dims = c(1:43))
+
+  CD4CD8 <- FindClusters(CD4CD8, resolution = 0.8)
+
+Feature_rast(CD4CD8,'tissue',facets = 'patient')
+saveRDS(CD4CD8, CD4CD8RDS)
+# CD4CD8$integrated_snn_res.0.6
+Feature_rast(CD4CD8, c('CCR6', 'RORC', 'FOXP3', 'DPP4', 'IL23R', 'IL17A', 'IL17F', 'AREG', 'IFNG', 'IL22'), assay = 'RNA')
 
 # mark CD4 and CD8 based on CITEseq ---------------------------------------
 
 CD4CD8@assays$CITE@data
 # change name of cite seq antibodies
 
-CD4CD8 %<>% ScaleData( assay = 'CITE',vars.to.regress = c('patient'))
+CD4CD8 %<>% ScaleData( assay = 'CITE',vars.to.regress = c('patient', 'nCount_CITE'))
 rownames(CD4CD8@assays$CITE@data) %<>% str_replace('-TotalSeqC', '.protein')
 rownames(CD4CD8@assays$CITE@counts) %<>% str_replace('-TotalSeqC', '.protein')
 rownames(CD4CD8@assays$CITE@scale.data) %<>% str_replace('-TotalSeqC', '.protein')
@@ -312,18 +415,27 @@ Feature_rast(CD4CD8, c('CD4', 'CD8A', 'CD8B'))
 CD4CD8 %<>% AddMetaData(FetchData(CD4CD8, c('CD4.protein', 'CD8.protein'), slot = 'data'))
 # CD4 CD8 demultiplexing 
 
-CD4CD8@meta.data %<>% mutate(CD4CD8= case_when(orig.ident == 'p25_CD4'~ 'CD4', orig.ident == 'p25_CD8'~ 'CD8', cite_CD4.protein >= 0.8 & cite_CD8.protein >= 0.6 ~ 'DP',cite_CD8.protein >= 0.6 ~ 'CD8',cite_CD4.protein >= 0.8 ~'CD4',cite_CD4.protein < 0.8 & cite_CD8.protein < 0.6 ~ 'DN'))
+
+CD4CD8@meta.data %<>% mutate(CD4CD8= case_when(orig.ident == 'p25_CD4'~ 'CD4', orig.ident == 'p25_CD8'~ 'CD8', 
+     cite_CD4.protein >= 0.8 & cite_CD8.protein >= 0.7 ~ 'DP',
+     cite_CD8.protein >= 0.7 ~ 'CD8',
+     cite_CD4.protein >= 0.8 ~'CD4',
+     cite_CD4.protein < 0.8 & cite_CD8.protein < 0.7 ~ 'DN'))
 
 (Feature_rast(CD4CD8 %>% subset(patient != 'p25'),  g='CD4CD8', 'patient', d1='CD4.protein', d2='CD8.protein', assay = 'CITE', color_grd = 'grd', noaxis = F,  axis.number = T) +facet_wrap(~ patient,ncol = 2)+ggtitle('CITEseq on CD4 and CD8')+geom_hline(yintercept = 0.6)+geom_vline(xintercept = 0.8) )%T>%  figsave('CD4andCD8staining_cite.pdf', 200, 200)
 
 table(CD4CD8$CD4CD8)
 
-Feature_rast(CD4CD8, 'CD4CD8','patient',  colorset = 'gg')
+Feature_rast(CD4CD8, 'CD4CD8','ident',  colorset = 'gg')
+
+
+Feature_rast(CD4CD8, 'ident',facets = 'CD4CD8',  colorset = 'gg')
+
 table(CD4CD8$CD4CD8)
 
 ViolinPlot(CD4CD8, 'nCount_RNA', group.by = 'CD4CD8')
 
-saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+saveRDS(CD4CD8, CD4CD8RDS)
 
 # DP cells are significantly larger than other cells, thus we remove it as doublets
 # CD4CD8  %<>% subset(subset = CD4CD8 %in% c('CD4', 'CD8', 'DN'))
@@ -332,115 +444,63 @@ saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
 Feature_rast(CD4CD8,c('CD103.protein', 'CD49a.protein', 'CD69.protein'), assay = 'CITE', color_grd = 'grd')
 
 
-# dimensional reduction by PCA and UMAP -----------------------------------
 
 
-DefaultAssay(CD4CD8) <- "integrated"
-# scale data and run PCA
-CD4CD8 %<>% ScaleData( vars.to.regress = c('patient', 
-                                           "percent.mito",
-                                                   "S.Score",
-                                                   'G2M.Score',
-                                                   "percent.ribo",
-                                                   'nCount_RNA',
-                                                   'nFeature_RNA' )) %>% 
-  RunPCA(npcs = 100, verbose = T,nfeatures.print = 40)
+CD4CD8$Cell_cluster<- Idents(CD4CD8)
+
+ViFeature_rast(CD4CD8, c('CD4.protein', 'CD8.protein'), assay = 'CITE', color_grd = 'grd')
+Feature_rast(CD4CD8, c('ident','CD4CD8', 'tissue'))
+
+
+Feature_rast(CD4CD8)
 
 
 
 
-ElbowPlot(CD4CD8, ndims = 50)
-
-# jackstraw is a way to choose significant PCs
-CD4CD8 %<>% JackStraw( num.replicate = 100, dims = 80)%>%
-  ScoreJackStraw(dims = 1:80) 
-CD4CD8 %>% JackStrawPlot( dims = 1:50 ) %T>%
-  figsave('CD4CD8_lung_5p.jackstraw.pdf' , w = 400, h = 400)
-
-CD4CD8 <- RunUMAP(object = CD4CD8, dims = 1:42, 
-                   reduction = 'pca', min.dist = 0.2) %>%
-  FindNeighbors(dims = c(1:42))
-for (i in seq(0.6,1.5,0.1) %>% rev()) {
-  CD4CD8 <- FindClusters(CD4CD8, resolution = i)
-}
-
-CD4CD8$integrated_snn_res.0.6
-
-Feature_rast(CD4CD8, paste0('integrated_snn_res.',seq(0.6,1.3,0.1)), ncol =4) %T>% figsave('CD4CD8_different_reso.pdf', 400,200) 
-
-
-Feature_rast(CD4CD8,c('patient','integrated_snn_res.1.4','tissue', 'CD4CD8','CCR6', 'RORC', 'FOXP3', 'DPP4', 'IL23R'), sz = 1)
-
-Feature_rast(CD4CD8,'tissue',facet = 'patient')+facet_grid(~patient)
-
-cite
-
-CD4CD8@assays$CITE@counts
-
-saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
-Feature_rast(CD4CD8, c('CCR6', 'RORC', 'FOXP3', 'DPP4', 'IL23R', 'IL17A', 'IL17F', 'AREG', 'IFNG', 'IL22'), assay = 'RNA')
 
 
 # clean and 2nd clustering ------------------------------------------------
 # remove cells that not T cells 
 Feature_rast(CD4CD8, noaxis = F, axis.number = T)
-CD4CD8  %<>% subset(UMAP_1 >= -6)
+CD4CD8  %<>% subset(UMAP_1 >= -5 & CD4CD8 %in% c('CD4', 'CD8') )
 DefaultAssay(CD4CD8) <- "RNA"
 
 # CD4CD8<- PercentageFeatureSet(CD4CD8, '^HSPA', col.name =  'percent.hspa') 
 DefaultAssay(CD4CD8) <- "integrated"
-CD4CD8$percent.hspa
-CD4CD8@assays$integrated@var.features
-# scaling and 2nd round of clustering 
-
 CD4CD8 %<>% ScaleData( vars.to.regress = c(
                                            "percent.mito",
-                                           'percent.hspa',
                                            "S.Score",
                                            'G2M.Score',
                                            "percent.ribo",
-                                           'nCount_RNA',
+                                           'patient',
                                            'nFeature_RNA' )) %>% 
   RunPCA(npcs = 100, verbose = T,nfeatures.print = 40)
 
 CD4CD8 %<>% JackStraw( num.replicate = 100, dims = 80)%>%
   ScoreJackStraw(dims = 1:80) 
 CD4CD8 %>% JackStrawPlot( dims = 1:50 ) %T>%
-  figsave('CD4CD8_lung_5p.jackstraw.pdf' , w = 400, h = 400)
-saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+  figsave('CD4CD8_Pulm_8p.jackstraw.pdf' , w = 400, h = 400)
+saveRDS(CD4CD8, CD4CD8RDS)
 
 # set.seed(123)
-CD4CD8 <- RunUMAP(object = CD4CD8, dims = 1:45, seed.use = 1007,
+CD4CD8 <- RunUMAP(object = CD4CD8, dims = 1:40, seed.use = 1007,
                   reduction = 'pca', min.dist = 0.1) %>%
-  FindNeighbors(dims = c(1:45))
-for (i in seq(0.6,1.8,0.1) %>% rev()) {
+  FindNeighbors(dims = c(1:40))
+for (i in seq(0.7,1.8,0.1) %>% rev()) {
   CD4CD8 <- FindClusters(CD4CD8, resolution = i, random.seed = 123)
 }
-Feature_rast(CD4CD8)
+Feature_rast(CD4CD8, 'integrated_snn_res.1.5')
 
 table(CD4CD8@active.ident)
 
 
 
 
-
+CD4CD8$integrated_snn_res.1.8
 
 ClusterCompare(CD4CD8, '17', '2')
 
 Feature_rast(CD4CD8)
-# decide to use resolution 1.4 for clustering 
-Idents(CD4CD8)<- CD4CD8$integrated_snn_res.1.4
-
-CD4CD8$Cell_cluster<- Idents(CD4CD8)
-
-ClusterCompare(CD4CD8, '10', '7', group.by = 'integrated_snn_res.1.5')
-ViFeature_rast(CD4CD8, c('CD4.protein', 'CD8.protein'), assay = 'CITE', color_grd = 'grd')
-Feature_rast(CD4CD8, c('ident','CD4CD8'))
-
-
-Feature_rast(CD4CD8)+facet_wrap('ident')
-
-
 # # distribution between tissue and CD4CD9 --------------------------------
 
 
@@ -456,10 +516,10 @@ CD4CD8$ID <- paste0(CD4CD8$tissue,'_',CD4CD8$patient)
 #calculate tissue composition table
 
 comp_tissue <-CD4CD8@meta.data %>% group_by(tissue, ID, Cell_cluster) %>%  
-  summarise(n = n() ) %>% mutate(n = case_when(tissue == 'luLN'~ -n,
-                                               tissue == 'lung' ~ n)) %>% group_by(ID) %>% 
-  mutate(percent = case_when(tissue == 'luLN'~ -(n/sum(n)*100),
-                             tissue == 'lung' ~ n/sum(n)*100  )) %>% as.data.frame() 
+  summarise(n = n() ) %>% mutate(n = case_when(tissue == 'LN'~ -n,
+                                               tissue == 'Pulm' ~ n)) %>% group_by(ID) %>% 
+  mutate(percent = case_when(tissue == 'LN'~ -(n/sum(n)*100),
+                             tissue == 'Pulm' ~ n/sum(n)*100  )) %>% as.data.frame() 
 
 comp_tissue
 
@@ -673,8 +733,10 @@ CD4CD8$CD_pheno <-   paste0(CD4CD8$CD4CD8, '_',CD4CD8$Cell_cluster)
 
 # gene signatrue scors ----------------------------------------------------
 
-CD4CD8@meta.data <- CD4CD8@meta.data[,1:75]
 colnames(CD4CD8@meta.data)
+
+
+CD4CD8@meta.data <- CD4CD8@meta.data[, 1:50]
 
 sigtable <- read.xlsx('abd5778_Table_S3.xlsx',sheet = 1)
 
@@ -687,14 +749,17 @@ names(sigtable)
 sigtable$Tissue.resident
 
 
+sigtable$Tregs
+
+
 #caculate scores
 for (i in names(sigtable)) {
   CD4CD8 <- AddModuleScore(CD4CD8, features = list(sigtable[[i]]), name = i, assay = 'RNA')
   
 }
+colnames(CD4CD8@meta.data) %<>% str_replace("(?<=\\w)1$", '')
 
 
-colnames(CD4CD8@meta.data)[76:91] <- names(sigtable)
 
 
 Feature_rast(CD4CD8,names(sigtable), color_grd = 'grd')
@@ -716,7 +781,7 @@ DoHeatmap(subset(CD4CD8, downsample = 700),
         legend.key.height = unit(2,'mm'))+
   guides(color = FALSE, fill = guide_colourbar(title = 'Scaled modula score', title.position = 'top'))
 
-
+saveRDS(CD4CD8, CD4CD8RDS)
 # GSEA --------------------------------------------------------------------
 
 library(clusterProfiler)
@@ -747,14 +812,8 @@ ClusterCompare(CD4CD8, 'C13', 'C17')
 
 # CITEseq -----------------------------------------------------------------
 
-Feature_rast(CD4CD8,  g='CD4CD8', 'patient', d1='CD4.protein', d2='CD8.protein', assay = 'CITE', color_grd = 'grd', noaxis = F,  axis.number = T,slot = 'scale.data') +facet_wrap(~ patient,ncol = 2)+geom_hline(yintercept = 0.6)+geom_vline(xintercept = 0.8) 
-
-Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),  g='ident', 'tissue',  d1='CD103.protein', d2='CD49a.protein', assay = 'CITE', color_grd = 'grd', noaxis = F,  axis.number = T, slot = 'scale.data', sz = 4)
-
-
-
-+-Feature_rast(CD4CD8, c('CD103.protein', 'CD49a.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
-
+CD4CD8 %>% 
+  ScaleData(assay='CITE', features = rownames( .[['CITE']]), vars.to.regress= c('nCount_CITE', 'patient')) 
 
 # RNA vs CITE
 surfacemakers <- c('CD4','CD8A','CD8B', 'CXCR3','CCR6',  'ITGAE',   'CD69','CCR7','KLRB1','CD27','KLRG1', 'IL7R',
@@ -763,13 +822,17 @@ surfacemakers <- c('CD4','CD8A','CD8B', 'CXCR3','CCR6',  'ITGAE',   'CD69','CCR7
 
 surface_RNA <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')), surfacemakers, sz = 0.3)
 
-surface_CITE <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),sz = 0.3, CD4CD8@assays$CITE@data %>% rownames(), assay = 'CITE', color_grd = 'grd', slot = 'scale.data')
+surface_CITE <- Feature_rast(CD4CD8,sz = 0.3, CD4CD8@assays$CITE@data %>% rownames(), assay = 'CITE', color_grd = 'grd')
 
 RNAvsCITE  <- PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,vjust = -10) %T>%  figsave('RNAvsCITE.pdf',200, 290)
 
 PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,label_y = -2)
 
-map(lungTcell, ~ .x@assays$CITE@counts %>% rownames )
+map(PulmTcell, ~ .x@assays$CITE@counts %>% rownames )
+
+
+
+
 
 
 # Cluster adjustment ------------------------------------------------------
@@ -831,7 +894,7 @@ Idents(CD4CD8) <- CD4CD8$Cell_cluster
 
 
 UMAP_CD4CD8 <-(Feature_rast(CD4CD8, noaxis = F,sz = 0.3) +
-                 ggtitle('T cells from lung tissue and lymph nodes')+
+                 ggtitle('T cells from Pulm tissue and lymph nodes')+
                  scale_color_manual(labels = levels(CD4CD8$Cluster_pheno), values = umap.colors)+
                  guides(color = guide_legend(ncol = 2, title = 'phenotypes', override.aes = list(size = 1.5)))) %T>% figsave('umap_CD4CD8_with_phenotypes.pdf',  180, 100  )
 
@@ -861,10 +924,10 @@ Umap_donor_tissue <- Feature_rast(CD4CD8, 'ID', colorset = ID_cl, do.label = F, 
 #calculate tissue composition table
 
 comp_tissue <-CD4CD8@meta.data %>% group_by(tissue, ID, Cell_cluster) %>%  
-  summarise(n = n() ) %>% mutate(n = case_when(tissue == 'luLN'~ n,
-                                               tissue == 'lung' ~ -n)) %>% group_by(ID) %>% 
-  mutate(percent = case_when(tissue == 'luLN'~ (n/sum(n)*100),
-                             tissue == 'lung' ~ -n/sum(n)*100  )) %>% as.data.frame() 
+  summarise(n = n() ) %>% mutate(n = case_when(tissue == 'LN'~ n,
+                                               tissue == 'Pulm' ~ -n)) %>% group_by(ID) %>% 
+  mutate(percent = case_when(tissue == 'LN'~ (n/sum(n)*100),
+                             tissue == 'Pulm' ~ -n/sum(n)*100  )) %>% as.data.frame() 
 
 comp_tissue
 
@@ -966,7 +1029,7 @@ CD4CD8_DEGs <-
 CD4CD8_DEGs %>% filter(avg_log2FC >0) %>% count(cluster)
 
 CD4CD8_DEGs  %<>% filter(p_val_adj < 0.05 | abs(avg_log2FC) >0.5) 
-write.xlsx(CD4CD8_DEGs, 'lungabT_DEGs.xls')
+write.xlsx(CD4CD8_DEGs, 'PulmabT_DEGs.xls')
 
 top10deg <- CD4CD8_DEGs %>%
   # filter(!grepl('^RP|^MT', gene)) %>% 
@@ -1076,7 +1139,8 @@ TCRdirs <- list.dirs(path = 'raw') %>% str_subset('VDJ.+outs$' )
 # remove patient 31
 TCRdirs <- TCRdirs[c(1:5,7)]
 
-TCRs <- map2(TCRdirs, 1:6, ~ read.csv(paste0(.x, '/filtered_contig_annotations.csv' ))%>% 
+TCRs <- map2(TCRdirs, 1:6, ~  rbind(read.csv(paste0(.x, '/filtered_contig_annotations.csv' )),
+                                    read.csv(paste0(.x, '/filtered_contig_annotations_2.csv' )))%>% 
                filter(productive == 'True'& is_cell == 'True') %>%
                dplyr::select(c(1, 5:10, 13,14))  %>%
                mutate( patient = pt[[.y]],  
@@ -1125,7 +1189,7 @@ TCRs_paired %<>%  left_join(cdr3TRA_freq, by = c('cdr3_TRA','patient')) %>%
 
 TCRs_paired %>% head()
 
-saveRDS(TCRs_paired, 'abTCR.RDS')
+saveRDS(TCRs_paired, 'abTCR_new.RDS')
 
 # join the data 
 CD4CD8$bc_backup <- rownames(CD4CD8@meta.data)
@@ -1147,11 +1211,11 @@ Feature_rast(CD4CD8, 'cdr3_paired_perc',sz = 0.5)+
                           low = "#00ccff",midpoint = 1,
                          mid = 'purple', 
                          high = "#ff0066"   )
-Feature_rast(CD4CD8, c('cdr3_TRB_perc', 'tissue'), color_grd = 'grd', facet = 'patient')
+Feature_rast(CD4CD8, c('cdr3_TRB_perc', 'tissue'), color_grd = 'grd', facets = 'patient')
 
 
 
-qsaveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0924.rds')
 dim(CD4CD8@assays$RNA@counts)
 
 # TCR analysis -----------------------------------------------------------
@@ -1168,7 +1232,7 @@ table(CD4CD8$TCR_summary)
 
 TCRmapping <- CD4CD8@meta.data %>% group_by(tissue, patient) %>%  count(TCR_summary) %>% 
   mutate(percent = n/sum(n)*100)
- (ggplot(TCRmapping,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+mytheme) %T>% figsave('mappingrate_TCR.pdf', 150, 60)
+ (ggplot(TCRmapping,aes(x = tissue,y= percent, group = TCR_summary, fill = TCR_summary))+geom_bar(stat = 'identity',position = position_stack(reverse = T))+facet_grid(~patient)+fill_m()+theme_bw()+mytheme) %T>% figsave('mappingrate_TCR.new.pdf', 150, 60)
 
 
 # TCR clonal expansion ----------------------------------------------------
@@ -1184,7 +1248,7 @@ TCRabclonality_pt <-   map(patientID,~ CD4CD8 %>% subset(patient %in% .x) %>%
 TCRabclonality_fig <- PG(list(TCRabclonality_allcell, TCRabclonality_pt)) %T>% figsave('TCRabclonality_fig.pdf', 180, 100)
 
 PG(list(TCRabclonality_allcell, TCRabclonality_pt))
-saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0716.rds')
+saveRDS(CD4CD8, 'CD4CD8_integrated_2021_0924.rds')
 
 
 CD4CD8$cdr3_paired_freq
@@ -1249,11 +1313,47 @@ top10CD8_umap <- map(patientID, ~
 
 top10expanded<- PG(list(top10CD4_umap, top10CD8_umap), ncol = 2, labels = c('Top 10 CD4 TCR', 'Top 10 CD8 TCR'),label_fontface = 'plain') %T>% figsave('top10expanded_CD4CD8.pdf', 200,250)
 
+Feature_rast(CD4CD8, 'cdr3_TRA_perc', color_grd = 'grd')
+CD4CD8$cdr3_paired_perc
+
+
+# TCR VDJ -----------------------------------------------------------------
+
+CD4CD8@meta.data %<>% mutate(TRAVJ = case_when(!is.na(v_gene_TRA)  & !is.na(j_gene_TRA) ~ paste(v_gene_TRA, j_gene_TRA)  ) 
+                            )
+
+Feature_rast(subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20')) ,
+            c( 'TRAVJ'), noaxis = F, sz = 1, facets = 'patient')
+
+Feature_rast(subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20')) ,
+             c( 'TRAVJ', 'v_gene_TRB',  'cdr3_TRA_perc'), noaxis = F, sz = 1)
+
+CD4CD8$tissue
+
+
+BG = Feature_rast(CD4CD8, 'tissue', colorset = c('grey', 'grey'), do.label = F)+NoLegend()
+
+
+
+
+BG +(geom_point_rast(data =    subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20' ))  %>% FetchData(c('UMAP_1', 'UMAP_2', 'TRAVJ', 'c_gene_TRB', 'patient', 'tissue')
+), aes(x = UMAP_1, y = UMAP_2, color = TRAVJ, size  = 1) +scale_color_manual(values = ggplotColours(12)) )                  
+                     )+ggtitle('TRAV1-2 J12 TRBV6')+ facet_grid('patient')
+
+
+DimPlot(CD4CD8)
+
+
+Feature_rast(CD4CD8, 'patient')
+
+Feature_rast(CD4CD8, c('tissue', 'KLRB1', 'DPP4', 'RORC' , 'CD4', 'CD8A'), color_grd = 'grd', ncol =3)
+
+
 # TCRsharing --------------------------------------------------------------
 
 
 
-# TCR sharing between CD4 CD8 &  lung and LN
+# TCR sharing between CD4 CD8 &  Pulm and LN
 
 C14TCR <- CD4CD8@meta.data %>% filter(!is.na(cdr3_paired) & CD4CD8 %in% c('CD4', 'CD8')) %>% select(cdr3_paired,CD4CD8) %>% group_split(CD4CD8)
 
@@ -1318,7 +1418,7 @@ nrow(TCRbytissue %>% filter())
 TCRsharingtissue <- (TCRbytissue %>% 
                        ggplot(
                          aes( x = tissue , y = pairedfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
-                       ggtitle("TCR sharing between lung and LN")+
+                       ggtitle("TCR sharing between Pulm and LN")+
                        geom_flow(stat = "alluvium",
                                  color = "darkgray") +
                        # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
@@ -1427,18 +1527,18 @@ TCRsharing_CD8_cluster <-(TCRby_cluster %>%
 TCRsharing_CD8_cluster
 # public data satija ------------------------------------------------------
 
-lung_Satija <- readRDS('/home/big/tanlikai/Lung/public/Azimuth.lung.Satija.rds')
+Pulm_Satija <- readRDS('/home/big/tanlikai/lung/public/Azimuth.Pulm.Satija.rds')
 
 
 
-CD8diffcopd <- ClusterCompare(lung_Satija %>% subset(annotation.l1 == 'CD8 T'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
+CD8diffcopd <- ClusterCompare(Pulm_Satija %>% subset(annotation.l1 == 'CD8 T'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
 
-Mfdiffcopd <- ClusterCompare(lung_Satija %>% subset(annotation.l1 == 'Macrophage'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
+Mfdiffcopd <- ClusterCompare(Pulm_Satija %>% subset(annotation.l1 == 'Macrophage'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
 
-Basaldiffcopd <- ClusterCompare(lung_Satija %>% subset(annotation.l1 == 'Basal'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
+Basaldiffcopd <- ClusterCompare(Pulm_Satija %>% subset(annotation.l1 == 'Basal'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
 
 CD14monodiffcopd <-
-  ClusterCompare(lung_Satija %>% subset(annotation.l1 == 'CD14+ Monocyte'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
+  ClusterCompare(Pulm_Satija %>% subset(annotation.l1 == 'CD14+ Monocyte'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', do.plot = F)
 
 batcheff_copd_normal <- intersect(CD8diffcopd$table$gene, Basaldiffcopd$table$gene) %>% intersect(CD14monodiffcopd$table$gene) 
 intersect(CD8diffcopd$table$gene, CD14monodiffcopd$table$gene)
@@ -1447,32 +1547,32 @@ intersect(CD8diffcopd$table$gene, CD14monodiffcopd$table$gene)
 
 intersect(CD8diffcopd$table$gene, Basaldiffcopd$table$gene) %>% intersect(CD14monodiffcopd$table$gene)  %>% sort()
 
-Feature_rast(lung_Satija, c('tissue','TRDC', 'TRGC1', 'TRGC2', 'CD3D', 'CD3E') ,colorset = 'gg')
-Feature_rast(lung_Satija, c('TRAC','TRDC', 'TRGC1', 'TRGC2', 'CD3D', 'CD3E') ,sz = 0.2)
+Feature_rast(Pulm_Satija, c('tissue','TRDC', 'TRGC1', 'TRGC2', 'CD3D', 'CD3E') ,colorset = 'gg')
+Feature_rast(Pulm_Satija, c('TRAC','TRDC', 'TRGC1', 'TRGC2', 'CD3D', 'CD3E') ,sz = 0.2)
 
-lung_Satija$tissue %>% table()
-tcells <-  lung_Satija$cell_type %>% unique() %>% str_subset('T cell|thy')
+Pulm_Satija$tissue %>% table()
+tcells <-  Pulm_Satija$cell_type %>% unique() %>% str_subset('T cell|thy')
 
 diseases  <-  c('chronic obstructive pulmonary disease', 'normal', 'COVID-19')
 
-lungT_Satija <-  readRDS('/home/big/tanlikai/Lung/public/Azimuth.lung.Satija.rds') %>% 
+PulmT_Satija <-  readRDS('/home/big/tanlikai/lung/public/Azimuth.Pulm.Satija.rds') %>% 
   subset(cell_type %in% c(.$cell_type %>% unique() %>% str_subset('T cell|thy')) & disease %in% diseases)
-dim(lungT_Satija)
+dim(PulmT_Satija)
 
-colnames(lungT_Satija@meta.data)
-
-
-Feature_rast(lungT_Satija, c( 'CD3D', 'CD3E'), colorset = 'gg')
-Feature_rast(lungT_Satija, c( 'disease', 'health_status', 'tissue'), colorset = 'gg', sz = 0.1)
-lungT_Satija$disease %>% table
-table(lungT_Satija$disease, lungT_Satija$health_status)
+colnames(PulmT_Satija@meta.data)
 
 
-Feature_rast(lungT_Satija, c('CD4', 'CD8A', 'RORC', 'CCR6', 'FOXP3', 'TOX', 'ITGAE' , 'ITGA1'))
+Feature_rast(PulmT_Satija, c( 'CD3D', 'CD3E'), colorset = 'gg')
+Feature_rast(PulmT_Satija, c( 'disease', 'health_status', 'tissue'), colorset = 'gg', sz = 0.1)
+PulmT_Satija$disease %>% table
+table(PulmT_Satija$disease, PulmT_Satija$health_status)
+
+
+Feature_rast(PulmT_Satija, c('CD4', 'CD8A', 'RORC', 'CCR6', 'FOXP3', 'TOX', 'ITGAE' , 'ITGA1'))
 
 
 
-load('/home/big/tanlikai/Lung/public/GSE162498_NSCLC_CD3_4tumors_4Juxta_2Juxta.Rds')
+load('/home/big/tanlikai/lung/public/GSE162498_NSCLC_CD3_4tumors_4Juxta_2Juxta.Rds')
 Feature_rast(eleven.tils.cd3.integrated, 'IL17A')
 Feature_rast(eleven.tils.cd3.integrated)
 
@@ -1497,18 +1597,18 @@ table(three.tissues.cd3.integrated$tissue)
 
 # clean the data  
 
-lungT_Satija  %<>% 
+PulmT_Satija  %<>% 
 PercentageFeatureSet( '^MT', col.name =  'percent.mito') %>% 
   PercentageFeatureSet('^RP', col.name = 'percent.ribo')    %>% 
   PercentageFeatureSet('^HSPA', col.name =  'percent.hspa')
 
 
 
-ViolinPlot(lungT_Satija, 'nCount_RNA', box = T) +ylim(0, 10000)
-ViolinPlot(lungT_Satija, 'nFeature_RNA', box = T) +ylim(0, 5000)
-ViolinPlot(lungT_Satija, 'percent.mito', box = T) 
+ViolinPlot(PulmT_Satija, 'nCount_RNA', box = T) +ylim(0, 10000)
+ViolinPlot(PulmT_Satija, 'nFeature_RNA', box = T) +ylim(0, 5000)
+ViolinPlot(PulmT_Satija, 'percent.mito', box = T) 
 
-Feature_rast(lungT_Satija, g = 'percent.mito', d1 ="nCount_RNA",d2 ='nFeature_RNA', color_grd = 'grd',
+Feature_rast(PulmT_Satija, g = 'percent.mito', d1 ="nCount_RNA",d2 ='nFeature_RNA', color_grd = 'grd',
              
              noaxis = F, axis.number = T)+
   geom_smooth(method = "lm")+
@@ -1519,96 +1619,96 @@ Feature_rast(lungT_Satija, g = 'percent.mito', d1 ="nCount_RNA",d2 ='nFeature_RN
 
 
 
-lungT_Satija  %<>% subset( nFeature_RNA > 500 & nFeature_RNA < 2500 & nCount_RNA > 1000 & nCount_RNA < 6500& percent.mito < 16)
+PulmT_Satija  %<>% subset( nFeature_RNA > 500 & nFeature_RNA < 2500 & nCount_RNA > 1000 & nCount_RNA < 6500& percent.mito < 16)
 
-dim(lungT_Satija)
-lungT_Satija$donor %>%  unique()
-table(lungT_Satija$donor) %>% sort(decreasing = T)
+dim(PulmT_Satija)
+PulmT_Satija$donor %>%  unique()
+table(PulmT_Satija$donor) %>% sort(decreasing = T)
 
-table(lungT_Satija$donor, lungT_Satija$disease)
+table(PulmT_Satija$donor, PulmT_Satija$disease)
 
 
 TCELLgenes <- c('PTPRC','CD3D', 'CD3G', 'CD3E', 'TRAC', 'TRBC1', 'TRBC2','TRDC', 'TRGC1', 'TRGC2', 'CD4', 'CD8A', 'CD8B')
 
-Feature_rast(lungT_Satija, c('donor', 'disease', 'tissue'), colorset = 'gg', ncol =1)
-Feature_rast(lungT_Satija, TCELLgenes, noaxis = F)
-ViolinPlot(lungT_Satija, c('CD3D', 'CD3G', 'CD3E', 'TRAC', 'TRBC1', 'TRBC2','TRDC', 'TRGC1', 'TRGC2'),colors = umap.colors)
+Feature_rast(PulmT_Satija, c('donor', 'disease', 'tissue'), colorset = 'gg', ncol =1)
+Feature_rast(PulmT_Satija, TCELLgenes, noaxis = F)
+ViolinPlot(PulmT_Satija, c('CD3D', 'CD3G', 'CD3E', 'TRAC', 'TRBC1', 'TRBC2','TRDC', 'TRGC1', 'TRGC2'),colors = umap.colors)
 
 
 # select real T cells 
-lungT_Satija  %<>%  AddModuleScore(features = list(c('CD3D', 'CD3G', 'CD3E')),name = 'CD3score')
+PulmT_Satija  %<>%  AddModuleScore(features = list(c('CD3D', 'CD3G', 'CD3E')),name = 'CD3score')
 
-ViolinPlot(lungT_Satija, c('CD3score1'),colors = umap.colors)+geom_hline(yintercept = c(-0.1,0.6))
+ViolinPlot(PulmT_Satija, c('CD3score1'),colors = umap.colors)+geom_hline(yintercept = c(-0.1,0.6))
 
-Feature_rast(lungT_Satija, 'CD3score1', color_grd = 'grd', sz = 0.1)
+Feature_rast(PulmT_Satija, 'CD3score1', color_grd = 'grd', sz = 0.1)
 
-lungT_Satija$bc_backup <- rownames(lungT_Satija@meta.data)  
+PulmT_Satija$bc_backup <- rownames(PulmT_Satija@meta.data)  
 
-lungT_Satija@meta.data  %<>% mutate(CD3exp = case_when(CD3score1 < 0 ~ 'CD3neg',
+PulmT_Satija@meta.data  %<>% mutate(CD3exp = case_when(CD3score1 < 0 ~ 'CD3neg',
                                                        nr(CD3score1, 0, 0.6) ~ 'CD3lo',
-                                                       CD3score1 > 0.6 ~ 'CD3hi')) %>% `rownames<-`(lungT_Satija$bc_backup)
+                                                       CD3score1 > 0.6 ~ 'CD3hi')) %>% `rownames<-`(PulmT_Satija$bc_backup)
 
 
-Feature_rast(lungT_Satija, 'CD3exp',  sz = 0.5, colorset = 'gg', noaxis = F, axis.number = T) +
+Feature_rast(PulmT_Satija, 'CD3exp',  sz = 0.5, colorset = 'gg', noaxis = F, axis.number = T) +
   geom_hline(yintercept = c(0,9))+
   geom_vline(xintercept = c(-11,0))
 
-table(lungT_Satija$CD3exp)
+table(PulmT_Satija$CD3exp)
 
 
 
-lungT_Satija  %<>%  subset(CD3exp %in% c('CD3lo', 'CD3hi') & UMAP_1 > -11 & UMAP_1 < 0 & UMAP_2 > 0 & UMAP_2 < 9 )
+PulmT_Satija  %<>%  subset(CD3exp %in% c('CD3lo', 'CD3hi') & UMAP_1 > -11 & UMAP_1 < 0 & UMAP_2 > 0 & UMAP_2 < 9 )
 
-dim(lungT_Satija)
+dim(PulmT_Satija)
 
-Feature_rast(lungT_Satija, c('donor', 'tissue', 'disease'), colorset = 'gg', ncol =1)
-
-
-lungT_Satija  %<>%  FindVariableFeatures(selection.method = 'vst', nfeatures = 5000)
-
-lungT_Satija@assays$RNA@data
+Feature_rast(PulmT_Satija, c('donor', 'tissue', 'disease'), colorset = 'gg', ncol =1)
 
 
-vf1 <- lungT_Satija@assays$RNA@var.features
-vf2 <- lungT_Satija@assays$RNA@var.features
+PulmT_Satija  %<>%  FindVariableFeatures(selection.method = 'vst', nfeatures = 5000)
+
+PulmT_Satija@assays$RNA@data
+
+
+vf1 <- PulmT_Satija@assays$RNA@var.features
+vf2 <- PulmT_Satija@assays$RNA@var.features
 intersect(vf1, vf2)
 
-lungT_Satija@assays$RNA@var.features %<>%str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T) 
-VariableFeaturePlot(lungT_Satija) +ylim(-1, 10)
+PulmT_Satija@assays$RNA@var.features %<>%str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T) 
+VariableFeaturePlot(PulmT_Satija) +ylim(-1, 10)
 VariableFeaturePlot(CD4CD8)
 
-lungT_Satija@assays$RNA@var.features
+PulmT_Satija@assays$RNA@var.features
 multicores(mem = 200)
-Feature_rast(lungT_Satija, 'annotation.l1')
-lungT_Satija %<>%  ScaleData(verbose = FALSE, assay = 'RNA',feature = lungT_Satija@assays$RNA@var.features,
+Feature_rast(PulmT_Satija, 'annotation.l1')
+PulmT_Satija %<>%  ScaleData(verbose = FALSE, assay = 'RNA',feature = PulmT_Satija@assays$RNA@var.features,
 
                        vars.to.regress = c('percent.mito',  'nCount_RNA','nFeature_RNA', 'donor' ) )
 
 
-table(lungT_Satija$dataset_origin, lungT_Satija$disease)
+table(PulmT_Satija$dataset_origin, PulmT_Satija$disease)
 
 
-fwlungT_Satija  %<>%  RunPCA(npcs =  100) %>% RunUMAP(dims = 1:60, 
+fwPulmT_Satija  %<>%  RunPCA(npcs =  100) %>% RunUMAP(dims = 1:60, 
                                                     reduction = 'pca', min.dist = 0.2) %>%
   FindNeighbors(dims = c(1:60)) %>% 
   FindClusters(resulution = 0.6)
 
-Feature_rast(lungT_Satija, c('ident', 'tissue', 'disease'), colorset = 'gg')
+Feature_rast(PulmT_Satija, c('ident', 'tissue', 'disease'), colorset = 'gg')
 
-saveRDS(lungT_Satija, 'lungT_Satija_cleaned_processed.rds')
+saveRDS(PulmT_Satija, 'PulmT_Satija_cleaned_processed.rds')
 
-table(lungT_Satija$donor, lungT_Satija$disease)
+table(PulmT_Satija$donor, PulmT_Satija$disease)
 
 
-ClusterCompare(lungT_Satija %>% subset(annotation.l1 == 'CD8 T'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease')
+ClusterCompare(PulmT_Satija %>% subset(annotation.l1 == 'CD8 T'), 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease')
 
-lungT_Satija@assays$RNA@scale.data
+PulmT_Satija@assays$RNA@scale.data
 
-table(lungT_Satija$donor)
+table(PulmT_Satija$donor)
 
-table(lungT_Satija$tissue, lungT_Satija$disease)
+table(PulmT_Satija$tissue, PulmT_Satija$disease)
 
-lungT_Satija$project <- 'satija'
+PulmT_Satija$project <- 'satija'
 
 
 
@@ -1621,7 +1721,7 @@ CD4CD8$dataset_origin <- 'Prinz&Falk'
 
 
 CD4CD8$pj_tissue <- paste(CD4CD8$project, CD4CD8$tissue)
-lungT_Satija$pj_tissue <- paste(lungT_Satija$project, lungT_Satija$tissue)
+PulmT_Satija$pj_tissue <- paste(PulmT_Satija$project, PulmT_Satija$tissue)
 
 # CD4CD8.l <- CD4CD8 
 # CD4CD8.l  <- AddMetaData(CD4CD8.l, t(CD4CD8.l[['CITE']]@data)) 
@@ -1650,24 +1750,24 @@ CD4CD8.l[[x]]@assays$RNA@var.features %<>% str_subset('^NO-NAME|^MT|^IG|^TRAV|^T
 }
 
 
-lungT_Satija.l  <- SplitObject(lungT_Satija, split.by = "dataset_origin")
+PulmT_Satija.l  <- SplitObject(PulmT_Satija, split.by = "dataset_origin")
 
-map(lungT_Satija.l, ~ dim(.x))
+map(PulmT_Satija.l, ~ dim(.x))
 
-lungT_Satija.l$mayr_2020 <- NULL
-lungT_Satija.l$lukassen_2020 <- NULL
+PulmT_Satija.l$mayr_2020 <- NULL
+PulmT_Satija.l$lukassen_2020 <- NULL
 
 
-lungT_Satija.l <-   lapply(X = lungT_Satija.l, FUN = function(x) {
+PulmT_Satija.l <-   lapply(X = PulmT_Satija.l, FUN = function(x) {
   # x  <- AddMetaData(x, t(x[['CITE']]@data)) 
 
   x <- NormalizeData(x, verbose = FALSE)
   x <- FindVariableFeatures(x, verbose = FALSE)
 })
 
-for (x in names(lungT_Satija.l))      {
+for (x in names(PulmT_Satija.l))      {
   
-  lungT_Satija.l[[x]]@assays$RNA@var.features %<>% str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T)  %>% 
+  PulmT_Satija.l[[x]]@assays$RNA@var.features %<>% str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T)  %>% 
     setdiff(batcheff_copd_normal)
   
 }
@@ -1675,20 +1775,20 @@ for (x in names(lungT_Satija.l))      {
 
 multicores(mem = 400)
 
-anchors <- FindIntegrationAnchors(object.list = append(CD4CD8.l,lungT_Satija.l ), 
+anchors <- FindIntegrationAnchors(object.list = append(CD4CD8.l,PulmT_Satija.l ), 
                                   dims = 1:50)
-lung.integrated <- IntegrateData(anchorset = anchors, dims = 1:50)
+Pulm.integrated <- IntegrateData(anchorset = anchors, dims = 1:50)
 
 
-lung.integrated$project
+Pulm.integrated$project
 
 
-DefaultAssay(lung.integrated) <- "integrated"
+DefaultAssay(Pulm.integrated) <- "integrated"
 
-lung.integrated@meta.data  %<>% mutate(dataset_origin = case_when(project == 'Prinz&Falk' ~ 'Prinz&Falk',
+Pulm.integrated@meta.data  %<>% mutate(dataset_origin = case_when(project == 'Prinz&Falk' ~ 'Prinz&Falk',
                                                                   project == 'satija' ~ dataset_origin)) 
 # scale data and run PCA
-lung.integrated %<>% ScaleData( vars.to.regress = c('donor', 
+Pulm.integrated %<>% ScaleData( vars.to.regress = c('donor', 
                                                     'dataset_origin',
                                            "percent.mito",
                                            # 'project',
@@ -1699,83 +1799,83 @@ lung.integrated %<>% ScaleData( vars.to.regress = c('donor',
 
 
 
-ClusterCompare(lung.integrated, 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease')
+ClusterCompare(Pulm.integrated, 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease')
 
-ClusterCompare(lungT_Satija, 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', rm = 'NO-NAME|RP|MT|HIST|HSPA', genetoshow = 100)
+ClusterCompare(PulmT_Satija, 'chronic obstructive pulmonary disease', 'normal', group.by = 'disease', rm = 'NO-NAME|RP|MT|HIST|HSPA', genetoshow = 100)
 
-ElbowPlot(lung.integrated,ndims = 100)
-
-
-Feature_rast(lungT_Satija, 'disease')
+ElbowPlot(Pulm.integrated,ndims = 100)
 
 
-lung.integrated <- RunUMAP(object = lung.integrated, dims = 1:70, 
+Feature_rast(PulmT_Satija, 'disease')
+
+
+Pulm.integrated <- RunUMAP(object = Pulm.integrated, dims = 1:70, 
                   reduction = 'pca', min.dist = 0.2) %>%
   FindNeighbors(dims = c(1:70))
 for (i in seq(0.6,1,0.1) %>% rev()) {
-  lung.integrated <- FindClusters(lung.integrated, resolution = i)
+  Pulm.integrated <- FindClusters(Pulm.integrated, resolution = i)
 }
 
-ClusterCompare(lung.integrated, '3', '7', do.plot = F)
+ClusterCompare(Pulm.integrated, '3', '7', do.plot = F)
 
 
-Feature_rast(lung.integrated, c('tissue', 'CD4CD8','pj_tissue', 'disease', 'project'), ncol = 2, sz  = 0.2)
+Feature_rast(Pulm.integrated, c('tissue', 'CD4CD8','pj_tissue', 'disease', 'project'), ncol = 2, sz  = 0.2)
 
-Feature_rast(lung.integrated, 'ident', colorset = 'gg')
+Feature_rast(Pulm.integrated, 'ident', colorset = 'gg')
 
-lung.integrated$donor %>% unique()
-
-
-lung.integrated$tissue %>% unique()
-
-lung.integrated$CD4CD8
+Pulm.integrated$donor %>% unique()
 
 
-Feature_rast(lung.integrated, c('CD4', 'CD8A', 'CD8B', 'KLRB1', 'KLRG1', 'ITGA1',  'TRGC1', 'TRDC', 'FOXP3',
+Pulm.integrated$tissue %>% unique()
+
+Pulm.integrated$CD4CD8
+
+
+Feature_rast(Pulm.integrated, c('CD4', 'CD8A', 'CD8B', 'KLRB1', 'KLRG1', 'ITGA1',  'TRGC1', 'TRDC', 'FOXP3',
                                 'ITGAE', 'CD69' ,'RORC', 'CCR6','PDCD1', 'TOX') , assay = 'RNA')
 
 
 
-ClusterCompare(lung.integrated, '3', '4')
-saveRDS(lung.integrated, 'lungT.integrated.prinz.satija.rds')
+ClusterCompare(Pulm.integrated, '3', '4')
+saveRDS(Pulm.integrated, 'PulmT.integrated.prinz.satija.rds')
 
 # harmony -----------------------------------------------------------------
 library(harmony)
-lung.integrated@meta.data  %<>% mutate(dataset_origin = case_when(project == 'Prinz&Falk' ~ 'Prinz&Falk',
+Pulm.integrated@meta.data  %<>% mutate(dataset_origin = case_when(project == 'Prinz&Falk' ~ 'Prinz&Falk',
                                                                   project == 'satija' ~ dataset_origin)) %>% 
-  `rownames<-`(lung.integrated$bc_backup)
-DefaultAssay(lung.integrated) <- 'RNA'
+  `rownames<-`(Pulm.integrated$bc_backup)
+DefaultAssay(Pulm.integrated) <- 'RNA'
 
-lung.integrated  %<>%  FindVariableFeatures(selection.method = 'vst', nfeatures = 5000)
+Pulm.integrated  %<>%  FindVariableFeatures(selection.method = 'vst', nfeatures = 5000)
 
 
 
-lung.integrated@assays$RNA@var.features %<>%str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T)  %>% 
+Pulm.integrated@assays$RNA@var.features %<>%str_subset('^NO-NAME|^MT|^IG|^TRAV|^TRBV|^HSP|^RP', negate = T)  %>% 
   setdiff(batcheff_copd_normal)
 
 
 
 
-lung.integrated %<>% ScaleData( vars.to.regress = c(
+Pulm.integrated %<>% ScaleData( vars.to.regress = c(
   # 'donor', 
                                                     "percent.mito",
                                                     'dataset_origin',
                                                     # 'G2M.Score',
                                                     "percent.ribo",
                                                     'nCount_RNA',
-                                                    'nFeature_RNA' ), assay = 'RNA', feature = lung.integrated@assays$RNA@var.features) %>% 
+                                                    'nFeature_RNA' ), assay = 'RNA', feature = Pulm.integrated@assays$RNA@var.features) %>% 
   RunPCA(npcs = 100, verbose = T,nfeatures.print = 40) 
 
 
-lung.integrated %<>%  RunHarmony(group.by.vars = c('dataset_origin', 'donor')) %>% 
+Pulm.integrated %<>%  RunHarmony(group.by.vars = c('dataset_origin', 'donor')) %>% 
   RunUMAP(reduction = "harmony", dims = 1:40) %>% 
   FindNeighbors(preduction = "harmony", dims = 1:40) %>% FindClusters(resolution = 0.6)
-ElbowPlot(lung.integrated, reduction = 'harmony',ndims = 100)
+ElbowPlot(Pulm.integrated, reduction = 'harmony',ndims = 100)
 
-Feature_rast(lung.integrated, c('tissue', 'CD4CD8','pj_tissue', 'disease', 'project'), ncol = 2, sz  = 0.2)
+Feature_rast(Pulm.integrated, c('tissue', 'CD4CD8','pj_tissue', 'disease', 'project'), ncol = 2, sz  = 0.2)
 
   
-Feature_rast(lung.integrated, c('disease', 'dataset_origin', 'Cell_pheno'))
+Feature_rast(Pulm.integrated, c('disease', 'dataset_origin', 'Cell_pheno'))
 
 
-ClusterCompare(lung.integrated, '1', '6')
+ClusterCompare(Pulm.integrated, '1', '6')

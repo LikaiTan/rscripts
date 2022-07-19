@@ -31,7 +31,18 @@ TG_Casar@meta.data
 
 Feature_rast(TG_Casar, 'cloneType')
  
+TG_Casar@meta.data$bc_backup <- rownames(TG_Casar@meta.data)
 
+TG_Casar@meta.data %>%  group_by(orig.ident) %>% slice(1L) %>% pull(bc_backup)
+
+colnames(TG_Casar@meta.data )
+
+TG_Casar@meta.data %>% head
+
+TG_Casar@meta.data  %<>%  mutate(TCR = case_when(
+  !is.na(CTgene) ~ 'abTCR'
+))
+Feature_rast(TG_Casar, 'TCR')
 
 # creat project -----------------------------------------------------------
 
@@ -48,6 +59,70 @@ samplesheet <- data.frame(sample = dir_GEX, donor  = str_extract(dir_GEX, 'sampl
 
 
 
+
+
+# introduce gdTCR ---------------------------------------------------------
+
+dir_gdTCR
+raw_gdTCR <- map(dir_gdTCR, ~ read.csv(paste0('cellranger_out/',.x, '/outs/all_contig_annotations.csv' ))%>% 
+                   filter(productive == 'True'& is_cell == 'True'& grepl('GV|DV', v_gene))  %>%
+                   dplyr::select(c(1, 5:10, 13,14))  %>%
+                   mutate(  
+                     bc_backup = paste0(gsub('_gdTCR', '_', .x), gsub('-1', '', barcode)))%>% dplyr::select(-barcode)
+                 
+                 )%>% reduce(.f = rbind)
+
+raw_gdTCR
+
+
+TRGs <- raw_gdTCR %>% filter(grepl('GV', v_gene))%>% distinct(bc_backup, .keep_all = T) %>% 
+  # mutate(v_gene = str_remove(v_gene,'DV\\d')) %>%
+  rename_at(vars(-bc_backup), funs(sub('$','_TRG',.)))
+TRGs
+
+TRDs <- raw_gdTCR %>% filter(grepl('DV', v_gene))%>% distinct(bc_backup, .keep_all = T) %>% 
+  rename_at(vars(-bc_backup), funs(sub('$','_TRD',.))) %>%
+  mutate(v_gene_TRD = str_remove(v_gene_TRD, 'AV\\d\\d'))%>% 
+  mutate(v_gene_TRD = str_remove(v_gene_TRD, '-2'))
+TRDs
+TCRs <- full_join(TRGs,TRDs, by = c('bc_backup'))
+TCRs  %<>%  mutate(paired = 
+                     case_when(!is.na(v_gene_TRD) & !is.na(v_gene_TRG) ~ 
+                                 paste0(str_remove(v_gene_TRG,'TR'),' ',str_remove(v_gene_TRD,'TR'))))
+TCRs  %<>% mutate(cdr3_paired = 
+                    case_when(!is.na(v_gene_TRD) & !is.na(v_gene_TRG) ~ 
+                                paste(str_remove(v_gene_TRG,'TR'),cdr3_TRG,str_remove(v_gene_TRD,'TR'),cdr3_TRD))) 
+
+top9paired <- TCRs %>% filter(!is.na(paired))  %>%count(paired)   %>% 
+  arrange(desc(n)) %>% top_n(9,n) %>% pull(paired)
+TCRs<- TCRs %>% 
+  mutate(paired_sp =
+           case_when(paired %in% top9paired ~ paired, 
+                     !is.na(paired) ~ "Other paired")    ) %>%
+  mutate(paired_sp = factor(paired_sp, levels = c(top9paired, "Other paired")))
+# paired TRG and J 
+TCRs<- TCRs %>% mutate(TRGJP = case_when(!is.na(chain_TRG) ~ paste(v_gene_TRG, j_gene_TRG)))%>%
+  mutate(TRGJP = str_replace(TRGJP, ' TRG',' '))
+
+
+TG_Casar@meta.data  %<>% left_join(TCRs, by = 'bc_backup', suffix = c('','')) %>% `rownames<-`(TG_Casar@meta.data$bc_backup )
+
+TCRs
+
+
+TG_Casar@meta.data  %<>%  mutate(TCR_ab_gd = case_when(
+  !is.na(CTgene)& ( !is.na(chain_TRD ) | !is.na(chain_TRG )) ~ 'dual-TCR',
+  !is.na(CTgene) ~ 'abTCR',
+  !is.na(chain_TRD ) | !is.na(chain_TRG )  ~ 'gdTCR'
+))
+
+Feature_rast(TG_Casar, 'TCR_ab_gd')
+
+
+TG_Casar@meta.data$nFeature_RNA
+
+
+ViolinPlot(TG_Casar, 'nFeature_RNA', group.by = 'TCR_ab_gd')
 
 # gene expression ---------------------------------------------------------
 

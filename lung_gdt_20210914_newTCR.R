@@ -1195,9 +1195,48 @@ ViolinPlot(GDTlung_s %>% subset(v_gene_TRG %in% c('TRGV9')), 'length_TRG')
 
 
 
+pub <- GDTlung_s@meta.data %>%  filter(public_TRD %in% c( 'publicTRDV1')) %>%  group_by(patient) 
 
-GDTlung_s$detected.no %>% table()
+table(pub$patient, pub$cdr3_TRD)
+
+
+ GDTlung_s$detected.no %>% table()
+ 
+ 
+ grep(shared, alluniqueTRD)
+ 
+
+# TCR sharing with David Vermijlen data -----------------------------------
+DVdata <- list.files('/home/big/tanlikai/Fetal_thymus_TCR_David_V/',full.names = T) %>% 
+   map( ~ read.table(.x, header = T))
+ 
+ 
+ 
+DVdata_D  <- list.files('/home/big/tanlikai/Fetal_thymus_TCR_David_V/') %>% 
+  str_subset('_D.txt')%>% 
+  map( ~ read.table(paste0('/home/big/tanlikai/Fetal_thymus_TCR_David_V/', .x), header = T) %>%  mutate(sample = .x)) %>%  purrr::reduce(.f = rbind) 
+
+
+DV_TRD <- DVdata_D %>%  pull(cdr3aa)
+
+ 
+lungTCRs <- GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% pull(cdr3_TRD)
+
+
+shared <- intersect(DV_TRD, lungTCRs)
+
+
+
+GDTlung_s@meta.data %>% filter(cdr3_TRD == shared)
+
+GDTlung_s@meta.data %>% filter(cdr3_TRD == 'CALGELGDDKLIF')
+
+
+DVdata_D %>% filter(cdr3aa == shared)
+
+saveRDS(DVdata_D, '/home/big/tanlikai/Fetal_thymus_TCR_David_V/delta.rds')
 # CITESEQ analysis --------------------------------------------------------
+
 
 
 

@@ -25,7 +25,7 @@ multicores()
 #paralell computation
 
 # work dir ----------------------------------------------------------thx
-------
+
 setwd('/home/big/tanlikai/Lung/abt')
 
 CD4CD8 <- readRDS('CD4CD8_integrated_2021_0716.rds')
@@ -751,7 +751,8 @@ Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),  g='ident', 'tissue',
 
 
 
-+-Feature_rast(CD4CD8, c('CD103.protein', 'CD49a.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
+Feature_rast(CD4CD8, c('CD103.protein', 'CD49a.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
+Feature_rast(CD4CD8, c('CD161.protein', 'CD26.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
 
 
 # RNA vs CITE
@@ -768,6 +769,10 @@ RNAvsCITE  <- PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), nco
 PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,label_y = -2)
 
 map(lungTcell, ~ .x@assays$CITE@counts %>% rownames )
+
+
+
+
 
 
 # Cluster adjustment ------------------------------------------------------
@@ -1247,6 +1252,42 @@ top10CD8_umap <- map(patientID, ~
 
 
 top10expanded<- PG(list(top10CD4_umap, top10CD8_umap), ncol = 2, labels = c('Top 10 CD4 TCR', 'Top 10 CD8 TCR'),label_fontface = 'plain') %T>% figsave('top10expanded_CD4CD8.pdf', 200,250)
+
+Feature_rast(CD4CD8, 'cdr3_TRA_perc', color_grd = 'grd')
+CD4CD8$cdr3_paired_perc
+
+
+# TCR VDJ -----------------------------------------------------------------
+
+CD4CD8@meta.data %<>% mutate(TRAVJ = case_when(!is.na(v_gene_TRA)  & !is.na(j_gene_TRA) ~ paste(v_gene_TRA, j_gene_TRA)  ) 
+                            )
+
+Feature_rast(subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20')) ,
+            c( 'TRAVJ'), noaxis = F, sz = 1, facets = 'patient')
+
+Feature_rast(subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20')) ,
+             c( 'TRAVJ', 'v_gene_TRB',  'cdr3_TRA_perc'), noaxis = F, sz = 1)
+
+CD4CD8$tissue
+
+
+BG = Feature_rast(CD4CD8, 'tissue', colorset = c('grey', 'grey'), do.label = F)+NoLegend()
+
+
+
+
+BG +(geom_point_rast(data =    subset(CD4CD8, v_gene_TRA == 'TRAV1-2' & j_gene_TRA %in% c('TRAJ12', 'TRAJ30', 'TRAJ20' ))  %>% FetchData(c('UMAP_1', 'UMAP_2', 'TRAVJ', 'c_gene_TRB', 'patient', 'tissue')
+), aes(x = UMAP_1, y = UMAP_2, color = TRAVJ, size  = 1) +scale_color_manual(values = ggplotColours(12)) )                  
+                     )+ggtitle('TRAV1-2 J12 TRBV6')+ facet_grid('patient')
+
+
+DimPlot(CD4CD8)
+
+
+Feature_rast(CD4CD8, 'patient')
+
+Feature_rast(CD4CD8, c('tissue', 'KLRB1', 'DPP4', 'RORC' , 'CD4', 'CD8A'), color_grd = 'grd', ncol =3)
+
 
 # TCRsharing --------------------------------------------------------------
 

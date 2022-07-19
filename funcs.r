@@ -74,15 +74,15 @@ gglp <- function(p = 'n', s= 3) {
 
 
 
-ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|^RP", test = 'bimod', 
-                           p_cutoff = 0.05, assay = 'RNA', do.plot = TRUE, group.colors = NULL,
-                           min.pct = 0.15, genetoshow = 50, ds = 500) {
+ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL, rm = "^MT|^RP", test = 'bimod', 
+                           p_cutoff = 0.05, assay = 'RNA', do.plot = TRUE, group.colors = NULL, features = NULL,
+                           min.pct = 0.1, genetoshow = 50, ds = 500) {
   DefaultAssay(ob) <- assay
     if (!is.null(group.by)) {
       Idents(ob) <- ob[[group.by]]
     }
   result <- c()
-  result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F,
+  result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
                                logfc.threshold = log2fc, min.pct = min.pct,
                                test.use = test)%>%
     tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>%
@@ -145,10 +145,11 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.5,group.by = NULL, rm = "^MT|
 # labels: if have multiple variables to show, you can assign labels for each one.
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
-                         mythe =T, titleface = 'italic',colorset = c('um','gg'), color_grd = c('threecolor','grd'),
+                         mythe =T, titleface = 'italic',colorset = c('um','gg'), 
+                         color_grd = c('grd','threecolor'),
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
-                         d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F,
-                         labels = NULL, sort =TRUE, assay = 'RNA',slot = 'data',
+                         d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
+                         labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
                          l = alpha('lightgrey', 0.3), h = 'red', m = 'purple' , navalue =alpha('lightgrey', 0.4) ) {
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
@@ -181,7 +182,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
         mytheme
       })+
       #color
-      (if (isTRUE(is.numeric(fd[[g]]))){ if (color_grd == 'grd') {
+      (if (isTRUE(is.numeric(fd[[g]]))){ if (color_grd[1] == 'grd') {
         scale_color_gradientn( na.value = navalue,
      colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
 
@@ -189,9 +190,9 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
         scale_color_gradient2(low = l, high = h, mid = m, na.value = navalue,
                               midpoint = median(fd[[g]][fd[[g]]>0])*mid.point*2)}
       } else {
-        scale_color_manual(values = (if (colorset == "gg"){
+        scale_color_manual(values = (if (colorset[1] == "gg"){
           ggplotColours(length(unique(fd[[g]])))
-        } else if (colorset == 'um') {
+        } else if (colorset[1] == 'um') {
           umap.colors
         } else {colorset}   ) ,  na.value = navalue) })+
       (if(isTRUE(do.label) & !is.numeric(fd[[g]]))
@@ -206,7 +207,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
             plot.title = element_text(size = titlesize, face = titleface) )+
       othertheme+
       ( if(is.character(as.vector(fd[[g]]))) {
-        guides(color = guide_legend(override.aes = list(size = 2))) })+
+        guides(color = guide_legend(override.aes = list(size = 2), nrow = legendrow, ncol = legendcol)) })+
       if (isTRUE(noaxis)) {
         NoAxes()
       } else if (!isTRUE(axis.number)) {
@@ -231,7 +232,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
           mytheme
         })+
         #color
-        (if (isTRUE(is.numeric(as.vector(fd[[i]])))){if (color_grd == 'grd') {
+        (if (isTRUE(is.numeric(as.vector(fd[[i]])))){if (color_grd[1] == 'grd') {
           scale_color_gradientn( na.value = navalue,
                                  colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
 
@@ -239,9 +240,9 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
           scale_color_gradient2(low = l, high = h, mid = m,na.value = navalue,
                                 midpoint = median(fd[[i]][fd[[i]]>0])*mid.point*2) }
         } else {
-          scale_color_manual(values = (if (colorset == "gg"){
+          scale_color_manual(values = (if (colorset[1] == "gg"){
             ggplotColours(length(unique(fd[[i]])))
-          } else if (colorset == 'um') {
+          } else if (colorset[1] == 'um') {
             umap.colors
           } else {colorset}   ), na.value = navalue)
         })+
@@ -269,6 +270,56 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
   }
   return(gp)
 }
+
+
+
+
+
+Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", 
+                             ncol = min(5, length(feature)), joint =F, method = c("ks", "wkde"),
+                            adjust = 1,shape = 16, nrow = NULL, 
+                            mythe =T, titleface = 'italic',titlesize =8,
+                           noaxis = T, axis.number = F,
+                            labels = NULL,  assay = DefaultAssay(data),slot = NULL ) {
+  
+  DefaultAssay(data) <- assay
+  if (length(feature) ==1 ) {
+   
+ gp<- plot_density(object=data, features=feature, joint = joint, 
+                             pal =pal, slot = slot, size =sz, method = method)+
+      ( if (isTRUE(mythe)) {
+        mytheme
+      })+      
+   theme(legend.key.height = unit(4, 'mm'),
+                     legend.key.width = unit(1,'mm'),
+                     plot.title = element_text(size = titlesize, face = titleface) )+
+   if (isTRUE(noaxis)) {
+     NoAxes()
+   } else if (!isTRUE(axis.number)) {
+     notick
+   }
+  } else {
+   gp<- plot_density(object=data, features=feature, joint = joint, combine = F,
+                     pal =pal, slot = slot, size =sz, method = method)
+   gp <- map(gp, ~ .x +
+               ( if (isTRUE(mythe)) {
+                 mytheme
+               })+      
+               theme(legend.key.height = unit(4, 'mm'),
+                     legend.key.width = unit(1,'mm'),
+                     plot.title = element_text(size = titlesize, face = titleface) )+
+               if (isTRUE(noaxis)) {
+                 NoAxes()
+               } else if (!isTRUE(axis.number)) {
+                 notick
+               })
+   
+   gp <- gp %>%  PG(nrow = nrow, ncol = ncol,  align = 'v', labels = labels )
+ }
+  
+  return(gp)
+} 
+
 
 
 
@@ -445,13 +496,15 @@ figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
 
 
 ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = NULL,size = 8, facet = NULL,
-                       ncol = min(3, length(g)), split = NULL, colors = ggplotColours(cln), othertheme = NULL,
+                       ncol = min(3, length(g)), split = NULL, 
+                       colors = ggplotColours(cln), othertheme = NULL,
                        idents = NULL,alpha_point =0.8, alpha_fill = 0.4, jitter = T, box = F,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',
-                       labels = NULL,
+                       assay = DefaultAssay(data),slot = 'data',
+                       labels = NULL, labelsize =8, labelface='plain',
                        mythe =F, titleface = 'italic'){
   if (length(g) == 1) {
-    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,split.by = facet)
+    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,split.by = facet, assay = assay, slot = slot)
     cln = fig$data$ident %>% unique() %>% length()
                   fig +
             (if(isTRUE(jitter)){
@@ -476,7 +529,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = N
                     othertheme
   } else {
     gp <- lapply(g, function(i) {
-      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by,split.by = facet)
+      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by,split.by = facet,assay = assay, slot = slot)
     cln = fig$data$ident %>% unique() %>% length()
     fig +
       (if(isTRUE(jitter)){
@@ -501,7 +554,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = N
 
     })
     if (isTRUE(Plotgrid) ) {
-      gp <-PG(gp,ncol = ncol, align = 'v', labels = labels)
+      gp <-PG(gp,ncol = ncol, align = 'v', labels = labels, label_fontface = labelface, label_size = labelsize)
     } else {
       gp <-setNames(gp, g)
     }
@@ -576,5 +629,48 @@ multicores <- function(core=40, mem = 100, strategy = 'multicore') {
 }
 
 multicores(mem = 200)
+
+
+
+# Hifreq_define <- map(id,  function(x) for (
+#   i in 1:nrow(filter(TRDfreq_id, orig.ident == x))){
+#   if (sum(filter(TRDfreq_id, orig.ident == x )$n[1:i])/sum(filter(TRDfreq_id, orig.ident == x )$n) >= 0.75 ) {
+#     return(i/nrow(filter(TRDfreq_id, orig.ident == x))*100)
+#     break
+#   }
+#   
+# }
+# ) %>% set_names(id) %>% as.data.frame()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
