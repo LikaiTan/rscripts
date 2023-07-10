@@ -1,0 +1,114 @@
+---
+title: "GSEA tutorial"
+author: "Likai"
+date: '2022-07-29'
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+```{r}
+setwd('/home/big/tanlikai/Lung/')
+
+```
+
+
+```{r setup, include=FALSE}
+library(Seurat)
+library(ggplot2)
+library(purrr)
+library(dplyr)
+library(ggplot2)
+library(cowplot)
+library(magrittr)
+
+source('/home/big/tanlikai/script/rscripts/funcs.r')
+```
+
+
+```{r gsea_related_packages} 
+
+library(clusterProfiler)
+library(msigdbr)
+library(enrichplot)
+```
+
+## R Markdown
+# to generate gene list
+# replace GDTcell with your own object, '0' and '1' with the clusters you want to compare
+
+```{r Seuratproject}
+GDTcell <- readRDS('public/GDTcell_satija.rds')
+```
+
+
+```{r genelist}
+CP01 <- entrezlist_generator(GDTcell, '0', '1')
+head(CP01)
+```
+
+# genereate reference
+
+# here means I choose homo sapiens, and category 7 (immunology) in Msigdb
+# http://www.gsea-msigdb.org/gsea/msigdb
+```{r GSEA references}
+Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+# HALLMARK
+HALLMARK <-  msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+# KEGG
+KEGG  <-   msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG') %>%
+  dplyr::select(gs_name, entrez_gene)
+```
+
+```{r}
+print(Mc7)
+```
+# Run GSEA
+# TERM2GENE is the gene list
+# for mouse project, you need change the OrgDb to org.Mm.eg.db
+```{r runGESA}
+GSEACP01 <- GSEA(geneList = CP01, TERM2GENE=Mc7,
+                 pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% 
+  setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+```
+#the result table is in object@result
+```{r}
+head(GSEACP01@result)
+
+```
+#export result as xlsx file 
+```{r}
+openxlsx::write.xlsx(GSEACP01@result, 'Lung_c0_c1_satijadata_GSEA_c7.xlsx')
+```
+
+#Visualization
+#select the ID you want to visualize to generate GSEA plot
+
+
+```{r}
+gseaplot2(GSEACP01, geneSetID = 'GSE25087_TREG_VS_TCONV_ADULT_UP')
+
+```
+
+
+```{r}
+gseaplot2(GSEACP01, geneSetID = c('GSE25087_TREG_VS_TCONV_ADULT_UP','GSE26495_NAIVE_VS_PD1LOW_CD8_TCELL_DN'  ))
+
+```
+```
+
+
+
+
+
+
+
+
+
+
+

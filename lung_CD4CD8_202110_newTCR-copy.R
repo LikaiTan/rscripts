@@ -28,7 +28,7 @@ multicores()
 
 setwd('/home/big/tanlikai/Lung/abt')
 
-CD4CD8 <- readRDS('CD4CD8_integrated_2021_0716.rds')
+CD4CD8 <- readRDS('CD4CD8_integrated_2022_8p.rds')
 
 Feature_rast(CD4CD8)
 # read_rawdata ---------------------------------------------------------------
@@ -750,8 +750,11 @@ Feature_rast(CD4CD8,  g='CD4CD8', 'patient', d1='CD4.protein', d2='CD8.protein',
 Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),  g='ident', 'tissue',  d1='CD103.protein', d2='CD49a.protein', assay = 'CITE', color_grd = 'grd', noaxis = F,  axis.number = T, slot = 'scale.data', sz = 4)
 
 
+ViolinPlot(CD4CD8, 'CD103.protein', assay = 'CITE')
 
-Feature_rast(CD4CD8, c('CD103.protein', 'CD49a.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
+
+Feature_rast(CD4CD8, c('CD103.protein', 'CD49a.protein', 'KLRG1.protein', 'CD69.protein'),
+             assay = 'CITE', color_grd = 'grd')
 Feature_rast(CD4CD8, c('CD161.protein', 'CD26.protein'),assay = 'CITE', color_grd = 'grd',slot = 'scale.data')
 
 
@@ -772,7 +775,7 @@ map(lungTcell, ~ .x@assays$CITE@counts %>% rownames )
 
 
 
-
+Feature_rast(CD4CD8, c('AREG', 'CSF2', 'ITGAE', 'ITGA1', 'ZNF683', 'CD4CD8', 'ITGB1'))
 
 
 # Cluster adjustment ------------------------------------------------------

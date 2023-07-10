@@ -146,7 +146,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL, rm = "^MT
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
                          mythe =T, titleface = 'italic',colorset = c('um','gg'), 
-                         color_grd = c('grd','threecolor'),
+                         color_grd = c('A', "B","C", "D",  'threecolor'),
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
@@ -182,13 +182,14 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
         mytheme
       })+
       #color
-      (if (isTRUE(is.numeric(fd[[g]]))){ if (color_grd[1] == 'grd') {
-        scale_color_gradientn( na.value = navalue,
-     colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
-
+      (if (isTRUE(is.numeric(fd[[g]]))){ 
+        if (color_grd[1] %in% c("A", "B", "C", "D")  ) {
+        scale_color_viridis(discrete = F, option = color_grd[1], na.value = 'transparent')
+        
       } else {
         scale_color_gradient2(low = l, high = h, mid = m, na.value = navalue,
-                              midpoint = median(fd[[g]][fd[[g]]>0])*mid.point*2)}
+                              midpoint = median(fd[[g]][fd[[g]]>0])*mid.point*2)
+        }
       } else {
         scale_color_manual(values = (if (colorset[1] == "gg"){
           ggplotColours(length(unique(fd[[g]])))
@@ -232,10 +233,10 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
           mytheme
         })+
         #color
-        (if (isTRUE(is.numeric(as.vector(fd[[i]])))){if (color_grd[1] == 'grd') {
-          scale_color_gradientn( na.value = navalue,
-                                 colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
-
+        (if (isTRUE(is.numeric(as.vector(fd[[i]])))){
+          if (color_grd[1] %in% c("A", "B", "C", "D")  ) {
+          scale_color_viridis(discrete = F, option = color_grd[1], na.value = 'transparent')
+          
         } else {
           scale_color_gradient2(low = l, high = h, mid = m,na.value = navalue,
                                 midpoint = median(fd[[i]][fd[[i]]>0])*mid.point*2) }
@@ -275,9 +276,9 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
 
 
 
-Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", 
+Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", reduction = 'umap',
                              ncol = min(5, length(feature)), joint =F, method = c("ks", "wkde"),
-                            adjust = 1,shape = 16, nrow = NULL, 
+                            adjust = 1,shape = 16, nrow = NULL,  othertheme = NULL,
                             mythe =T, titleface = 'italic',titlesize =8,
                            noaxis = T, axis.number = F,
                             labels = NULL,  assay = DefaultAssay(data),slot = NULL ) {
@@ -285,21 +286,23 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis",
   DefaultAssay(data) <- assay
   if (length(feature) ==1 ) {
    
- gp<- plot_density(object=data, features=feature, joint = joint, 
+ gp<- plot_density(object=data, features=feature, joint = joint, reduction = reduction,
                              pal =pal, slot = slot, size =sz, method = method)+
       ( if (isTRUE(mythe)) {
         mytheme
-      })+      
+      })+     
    theme(legend.key.height = unit(4, 'mm'),
                      legend.key.width = unit(1,'mm'),
-                     plot.title = element_text(size = titlesize, face = titleface) )+
+                     plot.title = 
+           element_text(size = titlesize, face = titleface) )+
+   othertheme+ 
    if (isTRUE(noaxis)) {
      NoAxes()
    } else if (!isTRUE(axis.number)) {
      notick
    }
   } else {
-   gp<- plot_density(object=data, features=feature, joint = joint, combine = F,
+   gp<- plot_density(object=data, features=feature, joint = joint, combine = F,reduction = reduction,
                      pal =pal, slot = slot, size =sz, method = method)
    gp <- map(gp, ~ .x +
                ( if (isTRUE(mythe)) {
@@ -307,7 +310,9 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis",
                })+      
                theme(legend.key.height = unit(4, 'mm'),
                      legend.key.width = unit(1,'mm'),
-                     plot.title = element_text(size = titlesize, face = titleface) )+
+                     plot.title = element_text(size = titlesize,
+                                               face = titleface) )+
+               othertheme+ 
                if (isTRUE(noaxis)) {
                  NoAxes()
                } else if (!isTRUE(axis.number)) {
@@ -495,16 +500,19 @@ figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
 
 
 
-ViolinPlot <- function(data, g, sz = 0.5, dpi = 300, mid.point = 1, group.by = NULL,size = 8, facet = NULL,
+ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
+                        group.by = NULL,
+                        facet = NULL,
                        ncol = min(3, length(g)), split = NULL, 
                        colors = ggplotColours(cln), othertheme = NULL,
                        idents = NULL,alpha_point =0.8, alpha_fill = 0.4, jitter = T, box = F,
-                       x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',
+                       x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 8,
                        assay = DefaultAssay(data),slot = 'data',
                        labels = NULL, labelsize =8, labelface='plain',
                        mythe =F, titleface = 'italic'){
   if (length(g) == 1) {
-    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,split.by = facet, assay = assay, slot = slot)
+    fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,
+                   split.by = facet, assay = assay, slot = slot)
     cln = fig$data$ident %>% unique() %>% length()
                   fig +
             (if(isTRUE(jitter)){
@@ -580,32 +588,37 @@ do.label <- function(data = NULL, label = "center", color = 'black',
 
 }
 
-umap.colors<- (c(
-  "#EC5ECE", #c1
-  "#59BF30",  #c2
-  "#9D43BB", #c3
-  "#1F405C", #c4
-  "#0F95DA",  #c5
-  "#638B83", #c6
-  "#FB6C46", #c7
-  "#FBD64A", #c8
-  "#B4DC49", #c9
-  "#A6E9DB" , #c10
-  "#CF5046", #c11
-  "#DE342F" , #c12
-  "#0F95B9",#
-  "#DB8A0F",#
-  "#6FD6E8", #
-  "#5E2870",
-  "#A34F23", #
-  "#A35A33", #
-  "#A33A43", #
-  "#F2895E", #
-  "#E7C595", #
-  "#D0D0D0", #
-  "#7D6C86" #
 
-)%>% set_sample(s = 18))[c(21, 6,3, 20, 5,2,7:16, 4,18,19,17, 1, 22,23)]
+
+# umapcolors --------------------------------------------------------------
+
+umap.colors <- c(
+  "#0F95B9",
+  "#B4DC49", 
+  "#EC5ECE", 
+  "#FBD64A" ,
+  "#638B83", 
+  "#6FD6E8",
+  "#CF5046",
+  "#1F405C" ,
+  "#F2895E",
+  "#A35A33",
+  "#DE342F", 
+  "#DB8A0F", 
+  "#A33A43",
+  "#7D6C86", 
+  "#D0D0D0" ,
+  "#E7C595", 
+  "#A34F23", 
+  "#0F95DA", 
+  "#5E2870" ,
+  "#59BF30",
+  "#A6E9DB", 
+  "#9D43BB", 
+  "#FB6C46"
+)
+
+
 
 color_m <- function(color = umap.colors, al =1,
                     na = alpha('lightgrey',0.5), labels = waiver()) {
@@ -622,13 +635,13 @@ fill_m <- function(color = umap.colors, al =1, na = alpha('lightgrey',0.5),label
 # future::plan(strategy = "multicore", workers = 40)
 
 
-multicores <- function(core=40, mem = 100, strategy = 'multicore') {
+multicores <- function(core=20, mem = 100, strategy = 'multicore') {
   options(future.fork.enable = TRUE)
-  options(future.globals.maxSize= mem*1024^3)
+  options(future.globals.maxSize= mem*1024^3,future.seed=TRUE)
   future::plan(strategy = strategy, workers = core)
 }
 
-multicores(mem = 200)
+# multicores(mem = 200)
 
 
 
@@ -641,9 +654,6 @@ multicores(mem = 200)
 #   
 # }
 # ) %>% set_names(id) %>% as.data.frame()
-
-
-
 
 
 

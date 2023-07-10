@@ -51,7 +51,7 @@ PulmTcell <- map2(rawdata,proj, ~
                     AddMetaData(str_extract(.y, 'p\\d\\d'),col.name = 'patient')
                  )
 
-
+PulmTcell$p32
 
 
 map(PulmTcell, ~ .@meta.data %>% colnames )
@@ -82,6 +82,7 @@ for (x in proj) {
 }
 
 PulmTcell$p32@assays$CITE
+
 
 
 # change names of HTO to more recognizable names 
@@ -258,6 +259,9 @@ map2(newmeta,bb,   ~ Feature_rast(.x, d1 =.y[[1]], d2= .y[[2]],
   figsave('hash.id.mannual.pdf', 400, 200)
 
 
+# gene expression ---------------------------------------------------------
+
+
 for (x in proj) {
   DefaultAssay(PulmTcell[[x]] ) <- 'RNA'
 }
@@ -323,20 +327,13 @@ map(PulmTcell,~ dim(.x))
 
 # normalization and scaling -----------------------------------------------
 # scale and find high var genes 
-
+multicores()
 
 PulmTcell %<>% map(~   NormalizeData(.x, normalization.method = 'LogNormalize',
                                scale.factor = 10000, assay = 'RNA')%>% 
                      CellCycleScoring( s.features = s.genes, g2m.features = g2m.genes, set.ident = F) %>%
-                     FindVariableFeatures(assay = 'RNA',nfeatures = 3500, selection.method = 'vst')  %>% 
+                     FindVariableFeatures(assay = 'RNA',nfeatures = 3500, selection.method = 'vst') )
 
-                     ScaleData( assay = 'RNA',
-                                vars.to.regress = c("percent.mito",
-                                                    "S.Score", 
-                                                    'G2M.Score',
-                                                    "percent.ribo",
-                                                    # 'nCount_RNA',
-                                                    'nFeature_RNA' )) )
 PulmTcell$p32@assays$RNA@scale.data
 
 
@@ -363,7 +360,7 @@ CD4CD8 %<>% ScaleData( vars.to.regress = c('patient',
                                            "percent.mito",
                                                    "S.Score",
                                                    'G2M.Score',
-                                                   "percent.ribo",
+                                                   # "percent.ribo",
                                                    # 'nCount_RNA',
                                                    'nFeature_RNA' )) %>% 
   RunPCA(npcs = 100, verbose = T,nfeatures.print = 40)
@@ -455,7 +452,7 @@ Feature_rast(CD4CD8, c('ident','CD4CD8', 'tissue'))
 Feature_rast(CD4CD8)
 
 
-
+Feature_density(CD4CD8,c('AREG', 'CTLA4', 'CSF1', 'IL2RA', 'TNFRSF18', 'GATA3', 'LGALS3'))
 
 
 
@@ -507,7 +504,7 @@ Feature_rast(CD4CD8)
 library(ggalluvial)
 library(RColorBrewer)
 
-ID_cl <- c(brewer.pal(9,'Blues')[5:9], brewer.pal(9,'Reds')[5:9])
+ID_cl <- c(brewer.pal(9,'Blues')[3:9], brewer.pal(9,'Reds')[3:9])
 
 # tissue
 
@@ -667,11 +664,9 @@ gene_to_scale <- unique(c(CD4CD8_DEGs$gene, CD4CD8@assays$RNA@var.features))
 
 
 CD4CD8 %<>% ScaleData( vars.to.regress = c('patient',
-                                           'percent.hspa',
                                            "percent.mito",
                                            "S.Score",
                                            'G2M.Score',
-                                           "percent.ribo",
                                            'nCount_RNA',
                                            'nFeature_RNA' ), assay = 'RNA', feature = gene_to_scale)
 CD4CD8_DEGs
@@ -762,7 +757,7 @@ colnames(CD4CD8@meta.data) %<>% str_replace("(?<=\\w)1$", '')
 
 
 
-Feature_rast(CD4CD8,names(sigtable), color_grd = 'grd')
+Feature_rast(CD4CD8,c(names(sigtable)[c(1:9, 14,15)], 'ident', 'tissue', 'CD4CD8'), color_grd = 'grd')
 
 ViolinPlot(CD4CD8, names(sigtable), colors = umap.colors, box = T)
 
@@ -822,7 +817,7 @@ surfacemakers <- c('CD4','CD8A','CD8B', 'CXCR3','CCR6',  'ITGAE',   'CD69','CCR7
 
 surface_RNA <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')), surfacemakers, sz = 0.3)
 
-surface_CITE <- Feature_rast(CD4CD8,sz = 0.3, CD4CD8@assays$CITE@data %>% rownames(), assay = 'CITE', color_grd = 'grd')
+surface_CITE <- Feature_rast(subset(CD4CD8, patient %in% c('p27', 'p71')),sz = 0.3, CD4CD8@assays$CITE@data %>% rownames(), assay = 'CITE', color_grd = 'grd')
 
 RNAvsCITE  <- PG(list(surface_RNA, surface_CITE), labels = c('RNA', 'CITE'), ncol = 1,vjust = -10) %T>%  figsave('RNAvsCITE.pdf',200, 290)
 
@@ -1143,7 +1138,7 @@ TCRs <- map2(TCRdirs, 1:6, ~  rbind(read.csv(paste0(.x, '/filtered_contig_annota
                                     read.csv(paste0(.x, '/filtered_contig_annotations_2.csv' )))%>% 
                filter(productive == 'True'& is_cell == 'True') %>%
                dplyr::select(c(1, 5:10, 13,14))  %>%
-               mutate( patient = pt[[.y]],  
+               dplyr::mutate( patient = pt[[.y]],  
                        bc_backup = paste0(barcode, "_",.y)   ) %>% dplyr::select(-barcode)) %>% 
   set_names(proj) %>% reduce(.f = rbind)
 TCRs %>% head()
@@ -1879,3 +1874,9 @@ Feature_rast(Pulm.integrated, c('disease', 'dataset_origin', 'Cell_pheno'))
 
 
 ClusterCompare(Pulm.integrated, '1', '6')
+
+
+GDTlung_s <- readRDS('../GDTlung280622.rds')
+
+
+ClusterCompare(GDTlung_s, 'L1', 'P8')

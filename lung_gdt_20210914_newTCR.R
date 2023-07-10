@@ -27,10 +27,7 @@ source('/home/big/tanlikai/script/rscripts/funcs.r')
 
 file.edit('//home/big/tanlikai/script/rscripts/funcs.r')
 
-#paralell computation
-options(future.fork.enable = TRUE)
-options(future.globals.maxSize= 400*1024^3)
-future::plan(strategy = "multicore", workers = 40)
+
 # future::plan(strategy = "sequential")
 # ?parallelly::supportsMulticore
 #single core
@@ -604,7 +601,7 @@ Feature_rast(GDTlung_s, c('ident','orig.ident')  )
 saveRDS(GDTlung_s,'GDTlung_6p_Seurat_07062021.rds')
 
 
-Cytokines <- c('IL17A','IL22',  'AREG','IFNG','CSF2', 'TNF',
+Cytokines <- c('IL17A','IL22',  'AREG','IFNG','CSF2', 'TNF', 'TGFB1',
                'GZMA', 'GZMB','GZMK', 'PRF1')
 
 
