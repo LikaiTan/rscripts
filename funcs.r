@@ -1,4 +1,15 @@
-
+library(Seurat)
+library(ggplot2)
+library(Nebulosa)
+library(ggrastr)
+library(cowplot)
+library(purrr)
+library(ggrepel)
+library(dplyr)
+library(magrittr)
+library(tibble)
+library(stringr)
+library(Cairo)
 # themes ------------------------------------------------------------------
 
 
