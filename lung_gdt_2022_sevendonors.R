@@ -32,7 +32,10 @@ file.edit('//home/big/tanlikai/script/rscripts/funcs.r')
 setwd("/home/big/tanlikai/Lung")
 
 # GDTlung_s <- SeuratDisk::LoadH5Seurat('GDTlung.h5Suerat.h5seurat')
-GDTlung.rds <- 'GDTlung2023june.rds'
+
+GDTlung_s  %<>% subset(patient != "p31")
+
+GDTlung.rds <- 'GDTlung2023july_7p.rds'
 
 
 
@@ -549,14 +552,14 @@ TFs_gd <- intersect(TFs, rownames(GDTlung_s))
 
 Feature_rast(GDTlung_s)
 
-P2P8_TFs<- ClusterCompare(GDTlung_s, 'gd_TRM_P3', 'gd_TMRA_P6', features = TFs_gd)
+GDTlung_s$pheno
 
+TRMTEMRA_TFs<- ClusterCompare(GDTlung_s, 'gd_TEMRA_P4', 'gd_TRM_P6', features = TFs_gd)
+TRMTEMRA_TFs<- ClusterCompare(GDTlung_s, 'Lung_memory', 'Lung_TRM',
+                              group.by = "pheno",
+                              features = TFs_gd)
+TRMTEMRA_Cyts<- ClusterCompare(GDTlung_s, 'gd_TEMRA_P4', 'gd_TRM_P6', features = Cytlist)
 
-# FindMarkers(object = GDTlung_s,ident.1 = 'P2', ident.2 = 'P8',features = TFs_gd)
-
-P2P8_TFs$plot
-P3P8_TFs<- ClusterCompare(GDTlung_s, 'P3', 'P8', features = TFs_gd)
-P3P8_TFs$plot
 # Gene modules ------------------------------------------------------------
 library(openxlsx)
 
@@ -946,9 +949,18 @@ Feature_rast(GDTlung_s, c('pheno','tissue'))
 
 Feature_rast(GDTlung_s, c('Trm','Cell_cluster'))
 
-Idents(GDTlung_s) <- GDTlung_s$Cell_cluster
+# # change L to LN and P to Lu, pulm to Lung , LN to LLN
+GDTlung_s$Cell_cluster  %<>% str_replace("_L", "_LN")
+GDTlung_s$Cell_cluster  %<>% str_replace("_P", "_Lu")
+
+
+Idents(GDTlung_s) <- GDTlung_s$Cell_cluster %>% factor(levels = sort(unique(GDTlung_s$Cell_cluster)))
+Feature_rast(GDTlung_s)
+
 
 saveRDS(GDTlung_s, GDTlung.rds)
+
+
 
 
 # tissue distribution -----------------------------------------------------
@@ -1601,14 +1613,15 @@ library(ggalluvial)
 # non VD2 
 
 
-TCRfreqtable <- GDTlung_s@meta.data %>% filter(cdr3_paired_freq >1 
-                                               
-                                               )  %>% group_by(pheno,tissue, cdr3_paired) %>%  summarise(TCRfreq = n()) %>% 
+TCRfreqtable <- GDTlung_s@meta.data %>% filter(cdr3_paired_freq >1  & paired != 'GV9 DV2'    )  %>% group_by(pheno,tissue, cdr3_paired) %>%  summarise(TCRfreq = n()) %>% 
   arrange(TCRfreq) #%>% mutate(cdr3_paired=factor(cdr3_paired, levels = unique(cdr3_paired)))
+TCRfreqtable
+
+
 
 gdTCRsharing <- TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
 
-  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm')) %>%  
+  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm')) %>%
 
   mutate(pheno = factor(pheno, levels = c('Lung_TRM', 'LN_memory', 'Lung_memory'))) %>% 
   ggplot(
@@ -1628,7 +1641,7 @@ gdTCRsharing <- TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>%
   guides(fill = guide_legend(ncol = 1, title = NULL))+
   # facet_wrap(~patient)+
   NULL
-
+gdTCRsharing
 TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
   
   filter(pt %in% c('Lung_TRM_Pulm',  'Lung_memory_Pulm') ) %>%  
@@ -1762,17 +1775,35 @@ TCRDfreqtable %>% filter(big_cluster %in% c( 'nonVD2_lung_1','nonVD2_lung_2', 'n
 
 # VD2
 GDTlung_s$paired
-VD2freqtable <- GDTlung_s@meta.data %>% dplyr::filter(cdr3_paired_freq >1 & 
-                                                        paired == 'GV9 DV2' )  %>%
+VD2freqtable <- GDTlung_s@meta.data %>%
+  dplyr::filter(cdr3_paired_freq >1 &   paired == 'GV9 DV2' )  %>%
   group_by(tissue, cdr3_paired) %>%  summarise(TCRDfreq = n()) %>% 
   arrange(TCRDfreq) 
 VD2freqtable %>% 
-  
-  
+  ggplot(
+    aes( x = tissue, y = TCRDfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
+  ggtitle("Vg9Vd2 TCR  sharing between lung & LN")+
+  geom_flow(stat = "alluvium",
+            color = "darkgray") +
+  # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
+  theme_minimal_hgrid()+
+  # scale_fill_manual(values = rainbow(270))+
+  geom_stratum()+ 
+  xlab(NULL) +ylab("TCRD frequencies")+
+  theme(legend.position = 'none', legend.key.size = unit(2, "mm"))+
+  guides(fill = guide_legend(ncol = 1, title = NULL))
+GDTlung_s$cdr3_TRD_freq
+# none(nonVg9vd2)
+
+NonVD2freqtable <- GDTlung_s@meta.data %>% dplyr::filter(cdr3_paired_freq >1 & 
+                                                        paired != 'GV9 DV2' )  %>%
+  group_by(tissue, cdr3_paired) %>%  summarise(TCRDfreq = n()) %>% 
+  arrange(TCRDfreq) 
+NonVD2freqtable %>% 
   
   ggplot(
     aes( x = tissue, y = TCRDfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
-  ggtitle("Vg9Vd2 TCR in M1 sharing in between lung & LN")+
+  ggtitle("Non Vg9Vd2 TCR sharing in between lung & LN")+
   geom_flow(stat = "alluvium",
             color = "darkgray") +
   # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
@@ -1818,7 +1849,7 @@ GDTlung_s$cdr3_TRD_freq
 
 
 # TCR similarity ----------------------------------------------------------
-library(scRepertoire)
+# library(scRepertoire)
 library(immunarch)
 
 
@@ -1857,7 +1888,7 @@ conflicted::conflict_prefer_all('dplyr')
 GDTlung_s$cdr3_nt_TRD
 Total_list1.trimmed_tcR <- GDTlung_s@meta.data %>% 
   mutate(CDR3.aa = cdr3_TRD,
-  CDR3.nt = cdr3_nt_TRD) %>% filter(!is.na(CDR3.nt) & cdr3_TRD_freq > 1 & Cluster.no != "M" ) %>% 
+  CDR3.nt = cdr3_nt_TRD) %>% filter(!is.na(CDR3.nt) & Cluster.no != "M" ) %>% 
   group_by(Cluster.no) %>% 
 count(CDR3.nt, name = 'Clones') %>% 
   mutate(Proportion = Clones/sum(Clones)) %>%  as.data.frame %>% 
@@ -1868,7 +1899,7 @@ split(f = .$Cluster.no)
 repOverlap(immdata$data, .method = "morisita")
 
 
-Mori_result <- repOverlap(Total_list1.trimmed_tcR, .method = "morisita", .verbose = F, .col = "nt")
+Mori_result_TRD <- repOverlap(Total_list1.trimmed_tcR, .method = "morisita", .verbose = F, .col = "nt")
 
 vis(Mori_result)+ 
   # ggtitle('Morisita index')+
@@ -1930,7 +1961,9 @@ GDTlung_s@meta.data %<>% mutate(length_TRD = case_when(!is.na(v_gene_TRD) ~ str_
                                 length_TRG = case_when(!is.na(v_gene_TRG) ~ str_length(cdr3_TRG) ) )
 
 
-ViolinPlot(GDTlung_s %>% subset(v_gene_TRD %in% c('TRDV1')), 'length_TRD', box = T)
+ViolinPlot(GDTlung_s %>% subset(v_gene_TRD %in% c('TRDV1')), 'length_TRD',
+           facet = "patient",
+           box = T)
 
 GDTlung_s@meta.data %>%  filter(v_gene_TRD == 'TRDV1'  
                                ) %>%  
@@ -2002,6 +2035,81 @@ giniindex_GDT
 
 
 
+# SCENIC result -----------------------------------------------------------
+
+gdAUCcells <- vroom::vroom("GDTlung_pyscenic/lung_output_tracks_no_parameter.csv")  %>% `colnames<-`(
+  gsub("\\(\\+\\)", "_REG", colnames(.) )  
+)
+
+gd_regulon 
+
+colnames(gdAUCcells) 
+
+dim(gdAUCcells)
+
+gdAUCcells$bc_backup
+
+gdAUCcells$bc_backup <-  gdAUCcells$Cell
+gdAUCcells$Cell <- NULL
+
+GDTlung_s@meta.data  %<>%  select_at(.vars = vars(-contains("_REG")))
+
+
+gdAUCcells
+
+GDTlung_s@meta.data  %<>% left_join(gdAUCcells, by = "bc_backup") %>% 
+  `rownames<-`(GDTlung_s$bc_backup)
+
+Feature_rast(GDTlung_s, c( "RORC_REG"),
+             othertheme =  scale_colour_gradient2(
+               low = "blue",
+               mid = "white",
+               high ="red",
+               # midpoint = 1,
+               space = "Lab",
+               na.value = "grey50",
+               guide = "colourbar",
+               aesthetics = "colour"
+             ))
+
+
+UMAPmeta <-  FetchData(CD4CD8, c("CD4CD8", "UMAP_1", "UMAP_2", "Cell_pheno", "bc_backup"))
+
+
+data_frame(UMAPmeta, AUCcells)
+
+
+UMAPmeta  %<>% data_frame(AUCcells) %>% as.data.frame()
+head(UMAPmeta)
+
+class(UMAPmeta)
+
+dim(UMAPmeta)
+class(UMAPmeta %>% as.data.frame())
+
+Feature_rast(UMAPmeta, "RUNX3_REG")
+
+
+UMAPmeta$`GATA3(+)`
+
+regulons %>% filter(X == "GATA3") %>% view()
+
+CD4CD8@assays$REG <- NULL
+
+# scaleGM <- scale(t(CD4CD8@meta.data[,c(names(sigtable))]))
+REGassay <- CreateAssayObject(data = AUCcells %>% column_to_rownames("Cell") %>% t())
+CD4CD8@assays$REG <- REGassay
+CD4CD8@assays$REG@key <- "REG_"
+
+DEGreg <- FindAllMarkers(CD4CD8, assay = "REG", only.pos = T,min.pct = 0,
+                         logfc.threshold = 0)
+DEGreg %>% view()
+DEGreg   %<>% filter(p_val_adj < 0.01)
+view(DEGreg)
+
+ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "REG", log2fc = 0.01)
+
+
 
 
 # GSEA --------------------------------------------------------------------
@@ -2025,7 +2133,7 @@ GO<-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = '
   dplyr::select(gs_name, entrez_gene)
 
 
-GSEAp2p8hallmark<-GSEA(geneList = p2p8en, TERM2GENE=HALLMARK,  
+GSEAp2p8hallmark<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=HALLMARK,  
                        minGSSize    = 15,
                        pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
@@ -2036,25 +2144,21 @@ view(GSEAp2p8hallmark@result)
 #                  pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
 
-GSEAp2p8GO<-gseGO(p2p8en,OrgDb = 'org.Hs.eg.db',ont = 'BP',pvalueCutoff = 0.05) %>%  simplify()%>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+GSEAp4p6GO<-gseGO(TRMvsTEMRA,OrgDb = 'org.Hs.eg.db',ont = 'BP',pvalueCutoff = 0.05) %>%  simplify()%>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
-write.xlsx(GSEAp2p8GO@result, 'GO_p2p8.xlsx')
+write.xlsx(GSEAp4p6GO@result, 'GSEAp4p6GO.xlsx')
 
-gseaplot2(GSEAp2p8GO, 'GO:0050678',title= 'regulation of \nepithelial cell proliferation' )
+gseaplot2(GSEAp4p6GO, 'GO:0050678',title= 'regulation of \nepithelial cell proliferation' )
 
-GSEAp2p8GO@result %>% view()
+GSEAp4p6GO@result %>% view()
 
-GSEAp2p8KEGG<-GSEA(geneList = p2p8en, TERM2GENE=KEGG, 
+GSEAp4p6KEGG<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=KEGG, 
                    minGSSize    = 10,
                    pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
-view(GSEAp2p8KEGG@result)
 
-GSEAp2p8GO@result %>% filter(grepl('epith', Description))
 
-GSEAp2p8GO@result %>% filter(grepl('AREG', core_enrichment))
-
-GSEAp2p8_c7 <- GSEA(geneList = p2p8en, TERM2GENE=Mc7,
+GSEAp4p6_c7 <- GSEA(geneList = TRMvsTEMRA, TERM2GENE=Mc7,
                     minGSSize    = 10,
                     pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
@@ -2070,69 +2174,64 @@ view(GSEAp2p8_c7@result
 
 
 
-write.xlsx(GSEAp2p8_c7@result, 'C7_p2vsp8.xlsx')
+write.xlsx(GSEAp2p8_c7@GSEAp4p6_c7, 'GSEAp4p6_c7.xlsx')
 
 c('GSE25087_TREG_VS_TCONV_ADULT_UP',
   'GSE25087_TREG_VS_TCONV_FETUS_UP',
   'GSE7852_TREG_VS_TCONV_FAT_UP',
   'GSE14415_INDUCED_TREG_VS_FAILED_INDUCED_TREG_UP') %>%
-  map(~ GSEA_multipplot(GSEAp2p8_c7,description_to_show = .x, base_size = 12,
+  map(~ GSEA_multipplot(GSEAp4p6_c7,description_to_show = .x, base_size = 12,
                         title = str_remove(.x, 'GSE\\d+_'), legend.position = 'no',
                         c1='P2', c2 = 'P8' )) %>% PG()
+view(GSEAp4p6_c7@result)
 
 
-
-GSEA_multipplot(GSEAp2p8_c7,description_to_show = c(
+GSEA_multipplot(GSEAp4p6_c7,description_to_show = c(
   'GSE25087_TREG_VS_TCONV_ADULT_UP',
-  'GSE25087_TREG_VS_TCONV_FETUS_UP'
+  'GSE7852_LN_VS_FAT_TREG_DN'
   
 ), 
                 
-                base_size = 12,
+                base_size = 8,
                 # title = str_remove(.x, 'GSE\\d+_'),
                 legend.position = 'bottom',
-                c1='P2', c2 = 'P8' )
+                c1='TRM_P6', c2 = 'TEMRA_P4' )
 
 
 
 GSEA_multipplot(GSEAp2p8_c7)
 
-gseaplot2(GSEAp2p8_c7,'GSE25087_TREG_VS_TCONV_ADULT_UP',title = 'TREG_VS_TCONV_FAT_UP')
+gseaplot2(GSEAp4p6_c7,'GSE25087_TREG_VS_TCONV_ADULT_UP',title = 'TREG_VS_TCONV_FAT_UP')
 
 
-GSEA_multipplot(GSEAp2p8_c7,description_to_show = c('GSE25087_TREG_VS_TCONV_ADULT_UP'
+GSEA_multipplot(GSEAp4p6_c7,description_to_show = c('GSE25087_TREG_VS_TCONV_ADULT_UP'
                                                     ), base_size = 10, 
                 title = 'TREG_VS_TCONV_FAT_UP',
             legend.position = 'no',
                 c1='P2', c2 = 'P8' )
 
 
-gseaplot2(GSEAp2p8_c7,'GSE25087_TREG_VS_TCONV_ADULT_UP',base_size = 15 )
+gseaplot2(GSEAp4p6_c7,'GSE25087_TREG_VS_TCONV_ADULT_UP',base_size = 15 )
 
 c('KEGG_T_CELL_RECEPTOR_SIGNALING_PATHWAY', 'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY') %>%
-  map(~ GSEA_multipplot(GSEAp2p8KEGG,description_to_show = .x, base_size = 12,
+  map(~ GSEA_multipplot(GSEAp4p6KEGG,description_to_show = .x, base_size = 12,
                         title = str_remove(.x, 'KEGG_'), legend.position = 'no',
-                        c1='P2', c2 = 'P8' )) %>% PG(ncol = 1)
-gseaplot2(GSEAp2p8KEGG,'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY',title = 'NATURAL_KILLER_CELL_\nMEDIATED_CYTOTOXICITY')
+                        c1='P6', c2 = 'P4' )) %>% PG(ncol = 1)
+gseaplot2(GSEAp4p6KEGG,'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY',title = 'NATURAL_KILLER_CELL_\nMEDIATED_CYTOTOXICITY')
+
+GSEA_multipplot(GSEAp4p6KEGG,description_to_show = c('KEGG_T_CELL_RECEPTOR_SIGNALING_PATHWAY', 'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY'), base_size = 8,legend.position = 'bottom',
+                title = "KEGG GSEA TRM vs TEMRA",
+                
+                c1='P6', c2 = 'P4' )
+
+
+
 
 GSEAp2p8KEGG@result$ID
 
 
+view(GSEAp4p6KEGG@result)
 
-
-GSEAp2L1_c7 <- GSEA(geneList = p2l1en, TERM2GENE=Mc7,  nPerm = 1000000, 
-                    minGSSize    = 10,
-                    pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
-
-
-view(GSEAp2L1_c7@result
-)
-
-
-GSEAp3p8_c7 <- GSEA(geneList = p3p8en, TERM2GENE=Mc7,
-                    minGSSize    = 10,
-                    pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
-GSEAp3p8_c7@result %>%  filter(grepl('TH2', ID))
 
 
 # !!!!!!!!!!!stop!!!!!!!!!!!!!!!!!!!! -------------------------------------
@@ -2631,3 +2730,386 @@ DVdata_D %>% filter(cdr3aa == shared)
 
 saveRDS(DVdata_D, '/home/big/tanlikai/Fetal_thymus_TCR_David_V/delta.rds')
 
+
+
+# Fig4 --------------------------------------------------------------------
+
+Feature_rast(GDTlung_s, "AREG", facets= "patient")
+
+F4A <- (Feature_rast(GDTlung_s, sz = 0.5, "v_gene_TRD",
+                  labelsize = 8,  do.label = F,
+                  noaxis = F
+                  
+)+ggtitle('TRDV genes')) %T>% print() 
+
+
+VD2freqtable %<>% mutate(tissue = replace(tissue, tissue == "Pulm", "Lung"))
+
+
+F4B <-  (VD2freqtable %>% 
+  ggplot(
+    aes( x = tissue, y = TCRDfreq, fill = cdr3_paired,  stratum= cdr3_paired, alluvium  = cdr3_paired))+
+  ggtitle("Vg9Vd2 TCR tissue sharing")+
+    geom_flow(stat = "alluvium",
+              size = 0.1,
+              color = "darkgray") +
+    theme_minimal_hgrid()+
+    # scale_fill_manual(values = rainbow(1100)[280:810])+
+    # facet_wrap(~patient, scales = "free", ncol = 5)+
+    geom_stratum(size = 0.05,color = alpha('black', 0.5))+ 
+    xlab(NULL) +ylab("TCRgd frequencies")+
+    theme(legend.position = 'none', legend.key.size = unit(2, "mm"), axis.text.x = element_text(angle = 90))+
+    guides(fill = guide_legend(ncol = 1, title = NULL)) +mytheme)%>% rasterise(dpi = 300) 
+
+F4B
+
+F4C <- Feature_rast(GDTlung_s, 
+                    c("SELL",  "ITGB2", "S1PR1", "KLF2"),
+                    sz = 0.3, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+F4D  <- Feature_rast(GDTlung_cite, 
+                    c("KLRB1.protein",  "CCR6.protein", "CD26.protein", "IL7R.protein"),
+                    sz = 0.5, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+
+F4E  <- Feature_rast(GDTlung_s, 
+                     c("RORC", "CCR6",  "IL23R", "IL4I1"),
+                     sz = 0.5, ncol = 2,  othertheme =theme(
+                       legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+
+Feature_rast(GDTlung_s, 'RORC')
+
+
+F4F <-  (ViolinPlot(GDTlung_s, "GM_D", box= T, jitter = F,  x.angle = 90,
+                    colors = umap.colors, ylabtext = "score", othertheme = theme(plot.title = element_text(size = 8)))+
+           ggtitle("Innate Type-3 module"))%T>% print() 
+
+F4ABC <- PG(list(F4A, F4B,F4C), labels = "AUTO", ncol = 3, rw = c(1.2,0.8,1))
+F4ABC
+
+F4DEF <- PG(list(F4D, F4E,F4F), labels =  c("D", "E", "F"), ncol = 3, rw = c(1,1,1))
+
+F4 <- (PG(list(F4ABC,F4DEF), nrow = 2, greed = F) +
+  draw_figure_label('Figure 4',
+                        
+                    position = 'top.right', size = 10, fontface = 'plain'))%T>% 
+  print() %>% figsave("Fig4_Vg9Vd2 T cells are circulating type-3 gdT cells.pdf", 200, 140)
+
+
+
+
+
+# Figure 5 ----------------------------------------------------------------
+
+
+# F5A morisita
+write.csv(Mori_result_TRD, "Mori_result_TRD.csv")
+
+Mori_result_TRD
+data_long <- melt(Mori_result_TRD, id.vars = "Unnamed: 0")
+
+
+data_long  %<>% mutate(Category.Var1 = case_when(
+  Var1  == "L1" ~ "Naive",
+  Var1 %in% c("L2", "L3", "L4") ~ "LN_memory",
+  Var1 %in% c("P1", "P2", "P3", "P4") ~ "Lung_memory",
+  Var1 %in% c("P5", "P6", "P7") ~ "Lung_TRM"
+),
+Category.Var2 = case_when(
+  Var2  == "L1" ~ "Naive",
+  Var2 %in% c("L2", "L3", "L4") ~ "LN_memory",
+  Var2 %in% c("P1", "P2", "P3", "P4") ~ "Lung_memory",
+  Var2 %in% c("P5", "P6", "P7") ~ "Lung_TRM"
+)
+)
+
+
+
+F5A <-  ggplot(data_long, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") + theme_nothing()+
+  scale_fill_gradientn( na.value = 'white',
+                        colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))+
+  mytheme+gglp("r")+
+  theme(axis.text.x = element_text(size = 8 , angle  = 90))+
+  xlab(NULL)+ylab(NULL)+
+  # theme(text = element_text(size = 2))+ 
+  ggtitle('Morisita index of TRD TCRs') 
+
+F5A
+library(ComplexHeatmap)
+library(circlize)
+
+categories <- ifelse(colnames(Mori_result_TRD) %in% c("L1", "L2", "L3", "L4"), "LN",
+                     ifelse(colnames(Mori_result_TRD) %in% c("P1", "P2", "P3", "P4"), "Lung_Temra",
+                            "Lung_Trm"))
+col_map <- c("LN" = "red", "Lung_Temra" = "green", "Lung_Trm" = "blue")
+col_map <- c("LN" = umap.colors[1], "Lung_Temra" = umap.colors[3], "Lung_Trm" = umap.colors[6])
+
+
+# Create a HeatmapAnnotation object for the color bar
+ha <- HeatmapAnnotation(df = data.frame(Category = factor(categories, levels = names(col_map))),
+                        col = list(Category = col_map),
+                        show_annotation_name = FALSE)
+
+# Create the heatmap
+F5A <-  Heatmap(Mori_result_TRD,
+        name = "Morisita Index", 
+        col = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100), na_col = "white",
+        show_row_names = T,cluster_columns = F, cluster_rows = F, 
+        # border = T,
+        rect_gp = gpar(col = "white", lwd = 1),
+        row_names_gp = gpar(fontsize =8),
+        heatmap_legend_param = list(
+          heatmap_legend_direction = "horizontal",
+          legend_direction = "horizontal",
+          # heatmap_legend_side="bottom",
+          # annotation_legend_side="right",
+          legend_grouping = "original",
+          legend_width = unit(2, "cm")), 
+        column_names_gp = gpar(fontsize = 8),
+        top_annotation = ha
+            )  
+F5A
+F5A <- draw(F5A, heatmap_legend_side="bottom", annotation_legend_side="right",
+     legend_grouping = "original") %>% grid.grabExpr() %>% ggplotify::as.ggplot()
+
+TCRfreqtable$TCRfreq
+
+
+
+LULN_TCRgd <- TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
+  arrange(desc(TCRfreq)) %>% 
+  # mutate(cdr3_paired = factor(cdr3_paired, levels = unique(cdr3_paired))) %>% 
+  
+  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm'))
+
+write.csv(LULN_TCRgd, "LULN_TCRgd.csv")
+
+F5B <-   (TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
+        arrange(desc(TCRfreq)) %>% 
+          # mutate(cdr3_paired = factor(cdr3_paired, levels = unique(cdr3_paired))) %>% 
+  
+  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm')) %>%
+  
+  mutate(pheno = factor(pheno, levels = c('Lung_TRM', 'LN_memory', 'Lung_memory'))) %>% 
+  ggplot(
+    aes( x = pheno, y = TCRfreq, fill = cdr3_paired, 
+         stratum= cdr3_paired, alluvium  = cdr3_paired))+
+  ggtitle("non-Vd2 TCR sharing beween Lung & LN")+
+    geom_flow(stat = "alluvium",    size = 0.1,   color = "darkgray") +
+    theme_minimal_hgrid()+
+    # scale_fill_manual(values = rainbow(1100)[280:810])+
+    # facet_wrap(~patient, scales = "free", ncol = 5)+
+    geom_stratum(size = 0.05,color = alpha('black', 0.5))+ 
+    xlab(NULL) +ylab("TCRgd frequencies")+
+    # ggtitle('TCR TRM_3 lineage')+
+    theme(legend.position = 'none', legend.key.size = unit(2, "mm"), axis.text.x = element_text(angle = 90))+
+    guides(fill = guide_legend(ncol = 1, title = NULL)) +mytheme)%>% rasterise(dpi = 300) 
+
+F5B
+
+library(circlize)
+library(RColorBrewer)
+library(igraph)
+library(ggraph)
+
+
+TCRgddata <- TCRfreqtable %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
+  arrange(desc(TCRfreq)) %>% 
+  # mutate(cdr3_paired = factor(cdr3_paired, levels = unique(cdr3_paired))) %>% 
+  
+  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm'))
+
+
+pheno_pairs <- unique(TCRgddata$pheno)
+shared_matrix <- matrix(0, nrow = length(pheno_pairs), ncol = length(pheno_pairs),
+                        dimnames = list(pheno_pairs, pheno_pairs))
+ribbon_colors <- list()
+
+cdr3_paired_colors <- setNames(rainbow(length(unique(TCRgddata$cdr3_paired))), unique(TCRgddata$cdr3_paired))
+
+
+# Compute the sum of shared TCRfreq for each pair of phenos
+for (i in seq_along(pheno_pairs)) {
+  for (j in seq_along(pheno_pairs)) {
+    if (i != j) {
+      # Get the cdr3_paired and TCRfreq for the two phenos
+      data_i <- TCRgddata[TCRgddata$pheno == pheno_pairs[i], c("cdr3_paired", "TCRfreq")]
+      data_j <- TCRgddata[TCRgddata$pheno == pheno_pairs[j], c("cdr3_paired", "TCRfreq")]
+      
+      # Compute the sum of shared TCRfreq, and the colors for the ribbons
+      shared_cdr3 <- intersect(data_i$cdr3_paired, data_j$cdr3_paired)
+      shared_matrix[i, j] <- sum(data_i[data_i$cdr3_paired %in% shared_cdr3, "TCRfreq"]) +
+        sum(data_j[data_j$cdr3_paired %in% shared_cdr3, "TCRfreq"])
+      ribbon_colors[[paste(pheno_pairs[i], pheno_pairs[j], sep = "-")]] <- cdr3_paired_colors[shared_cdr3]
+    }
+  }
+}
+
+# Create the chord diagram
+chordDiagram(shared_matrix, col = unlist(ribbon_colors))
+
+edges <- TCRgddata[, c("cdr3_paired", "pheno")]
+colnames(edges) <- c("from", "to")
+
+# Create a graph from the edge list
+g <- graph_from_data_frame(edges, directed=FALSE)
+g
+# Plot the graph
+ggraph(g, layout = 'fr') + 
+  geom_edge_link() + 
+  geom_node_point(size = 5, aes(color = name )) + 
+  # geom_node_text(aes(color = name), vjust = 1, hjust = 1) +
+  theme_graph()+NoLegend()
+
+
+
+F5C <- Feature_rast(GDTlung_s, 
+                    c(  "ZNF683", "GATA3","NR3C1","EOMES"),
+                    sz = 0.3, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+
+
+
+F5D <- GSEA_multipplot(GSEAp4p6KEGG,description_to_show = c('KEGG_T_CELL_RECEPTOR_SIGNALING_PATHWAY', 'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY'), base_size = 8,legend.position = 'bottom',col = umap.colors[c(3,4)],
+                       title = "GSEA Cytotoxictiy",
+                       
+                       c1='P6', c2 = 'P4' )
+
+
+F5E <- GSEA_multipplot(GSEAp4p6_c7,description_to_show = c(
+  'GSE25087_TREG_VS_TCONV_ADULT_UP',
+  'GSE7852_LN_VS_FAT_TREG_DN'
+  
+), title = "GSEA regulatory",
+ 
+base_size = 8, col = umap.colors[c(6,7)],
+legend.position = 'bottom',
+c1='P6', c2 = 'P4' )
+F5E
+
+F5F <-Feature_rast(GDTlung_s, 
+                   c( "AREG","CSF1", "CTLA4", "ENTPD1"),
+                   sz = 0.3, ncol = 2,  othertheme =theme(
+                     legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+
+
+F5ABC <- PG(list(F5A, F5B,F5C), labels = "AUTO", ncol = 3, rw = c(1.1,0.8,0.9)) %T>%  print()
+
+
+F5DEF <- PG(list(F5D, F5E,F5F), labels = c("D","E", "F"),
+            greed = T, scale = 0.85,
+            ncol = 3, rw = c(0.95,0.95,0.9)) %>% 
+  list(NA) %>% PG(ncol = 1, rh = c(1, 0.05))%T>%  print()  
+
+
+F5 <- (PG(list(F5ABC,F5DEF), nrow = 2, greed = T, scale = 0.85) +
+  draw_figure_label('Figure 5',  
+                    
+                    position = 'top.right', size = 10, fontface = 'plain'))%T>% 
+  print() %>% figsave("Fig5_gdTRM and TEMRA distinct in differentiation pathways and pheynotypes.pdf", 200, 150)
+
+
+TCRfreqtable_TRD <- GDTlung_s@meta.data %>% filter(cdr3_TRD_freq >1  & paired != 'GV9 DV2'    )  %>% group_by(pheno,tissue, cdr3_TRD) %>%  summarise(TCRfreq = n()) %>% 
+  arrange(TCRfreq) #%>% mutate(cdr3_paired=factor(cdr3_paired, levels = unique(cdr3_paired)))
+TCRfreqtable_TRD
+
+
+
+dTCRsharing <- TCRfreqtable_TRD %>% mutate(pt = paste0(pheno, "_", tissue)) %>% 
+  
+  filter(pt %in% c('Lung_TRM_Pulm', 'LN_memory_LN', 'Lung_memory_Pulm')) %>%
+  
+  mutate(pheno = factor(pheno, levels = c('Lung_TRM', 'LN_memory', 'Lung_memory'))) %>% 
+  ggplot(
+    aes( x = pheno, y = TCRfreq, fill = cdr3_TRD, 
+         stratum= cdr3_TRD, alluvium  = cdr3_TRD))+
+  ggtitle("paired gd TCR sharing")+
+  geom_flow(stat = "alluvium",
+            color = "darkgray") +
+  # scale_y_continuous(limits = c(0, 40), breaks = c(0, 10,20,30,40))+
+  theme_minimal_hgrid()+
+  # scale_fill_manual(values = ggplotColours(211))+
+  geom_stratum()+ 
+  xlab(NULL) +ylab("TCR frequencies")+
+  theme(legend.position = 'none', 
+        axis.text.x = element_text(angle = 315),
+        legend.key.size = unit(2, "mm"))+
+  guides(fill = guide_legend(ncol = 1, title = NULL))+
+  # facet_wrap(~patient)+
+  NULL
+dTCRsharing
+
+
+# color set test ----------------------------------------------------------
+
+
+
+fC <-  Feature_rast(
+  GDTlung_s, 
+  c("RORC", "CCR6",  "IL23R", "KLF2"),             color_grd = "D",
+             sz = 0.5, ncol = 2,  othertheme =theme(
+               legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+fA <-  Feature_rast(GDTlung_s, 
+                    c("RORC", "CCR6",  "IL23R", "KLF2"),
+                    color_grd = "A",
+                    sz = 0.5, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+fB <-  Feature_rast(GDTlung_s, 
+                    c("RORC", "CCR6",  "IL23R", "KLF2"),
+                    color_grd = "C",
+                    sz = 0.5, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+
+fD <-  Feature_rast(GDTlung_s, 
+                    c("RORC", "CCR6",  "IL23R", "KLF2"),
+                    color_grd = "threecolor",
+                    sz = 0.5, ncol = 2,  othertheme =theme(
+                      legend.margin = margin(0,0,0,-10, "pt"))  ) %T>% print() 
+
+fE <-  Feature_rast(GDTlung_s, 
+                    c("RORC", "CCR6",  "IL23R", "KLF2"),
+                  
+                    sz = 0.5, ncol = 2,  othertheme =  scale_colour_gradient2(
+                      low = "blue",
+                      mid = "white",
+                      high ="red",
+                      # midpoint = 1,
+                      space = "Lab",
+                      na.value = "grey50",
+                      guide = "colourbar",
+                      aesthetics = "colour"
+                    ) ) %T>% print() 
+
+
+PG(list(fA,fB,fC,fD,fE), labels = "AUTO", ncol = 2) %>% figsave("Gene_five_color_plan.pdf", 180, 270)
+
+
+
+Feature_rast(GDTlung_s, 
+             c("RORC", "CCR6",  "IL23R", "IL4I1"),
+             sz = 0.5, ncol = 2,  color_grd =  "threecolor")  %T>% print() 
+
+
+
+
+
+Feature_rast(GDTlung_s, 
+             c("RORC", "CCR6",  "IL23R", "KLF2"),
+             
+             sz = 0.5, ncol = 2,  othertheme =  scale_colour_gradientn(
+               colors = c("#eff4ff", "#ffcc66", "red", "#990000"),
+               # midpoint = 1,
+               space = "Lab",
+               na.value = "grey50",
+               guide = "colourbar",
+               aesthetics = "colour"
+             ) ) 

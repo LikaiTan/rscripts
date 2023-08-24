@@ -10,6 +10,7 @@ library(magrittr)
 library(tibble)
 library(stringr)
 library(Cairo)
+library(RColorBrewer)
 # themes ------------------------------------------------------------------
 
 
@@ -157,11 +158,12 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL, rm = "^MT
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
                          mythe =T, titleface = 'italic',colorset = c('um','gg'), 
-                         color_grd = c('A', "B","C", "D",  'threecolor'),
+               
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
-                         l = alpha('lightgrey', 0.3), h = 'red', m = 'purple' , navalue =alpha('lightgrey', 0.4) ) {
+                         colorgrd =  c("#eff4ff", "#ffcc66", "red", "#990000"),
+                         navalue =alpha('lightgrey', 0.4) ) {
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
@@ -194,13 +196,12 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
       })+
       #color
       (if (isTRUE(is.numeric(fd[[g]]))){ 
-        if (color_grd[1] %in% c("A", "B", "C", "D")  ) {
-        scale_color_viridis(discrete = F, option = color_grd[1], na.value = 'transparent')
-        
-      } else {
-        scale_color_gradient2(low = l, high = h, mid = m, na.value = navalue,
-                              midpoint = median(fd[[g]][fd[[g]]>0])*mid.point*2)
-        }
+        scale_colour_gradientn(
+          colors = colorgrd,
+          space = "Lab",
+          na.value = navalue,
+          guide = "colourbar",
+          aesthetics = "colour" )
       } else {
         scale_color_manual(values = (if (colorset[1] == "gg"){
           ggplotColours(length(unique(fd[[g]])))
@@ -245,12 +246,12 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
         })+
         #color
         (if (isTRUE(is.numeric(as.vector(fd[[i]])))){
-          if (color_grd[1] %in% c("A", "B", "C", "D")  ) {
-          scale_color_viridis(discrete = F, option = color_grd[1], na.value = 'transparent')
-          
-        } else {
-          scale_color_gradient2(low = l, high = h, mid = m,na.value = navalue,
-                                midpoint = median(fd[[i]][fd[[i]]>0])*mid.point*2) }
+          scale_colour_gradientn(
+            colors = colorgrd,
+            space = "Lab",
+            na.value = navalue,
+            guide = "colourbar",
+            aesthetics = "colour" )
         } else {
           scale_color_manual(values = (if (colorset[1] == "gg"){
             ggplotColours(length(unique(fd[[i]])))
@@ -292,6 +293,8 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
                             adjust = 1,shape = 16, nrow = NULL,  othertheme = NULL,
                             mythe =T, titleface = 'italic',titlesize =8,
                            noaxis = T, axis.number = F,
+                           colorgrd =  c("#eff4ff", "#ffcc66", "red", "#990000"),navalue= "transparent",
+                           
                             labels = NULL,  assay = DefaultAssay(data),slot = NULL ) {
   
   DefaultAssay(data) <- assay
@@ -302,6 +305,12 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
       ( if (isTRUE(mythe)) {
         mytheme
       })+     
+   scale_colour_gradientn(
+     colors = colorgrd,
+     space = "Lab",
+     na.value = navalue,
+     guide = "colourbar",
+     aesthetics = "colour" )+
    theme(legend.key.height = unit(4, 'mm'),
                      legend.key.width = unit(1,'mm'),
                      plot.title = 
@@ -318,7 +327,13 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
    gp <- map(gp, ~ .x +
                ( if (isTRUE(mythe)) {
                  mytheme
-               })+      
+               })+ 
+               scale_colour_gradientn(
+                 colors = colorgrd,
+                 space = "Lab",
+                 na.value = navalue,
+                 guide = "colourbar",
+                 aesthetics = "colour" )+
                theme(legend.key.height = unit(4, 'mm'),
                      legend.key.width = unit(1,'mm'),
                      plot.title = element_text(size = titlesize,
