@@ -11,8 +11,10 @@ library(dplyr)
 library(magrittr)
 library(tibble)
 library(stringr)
+library(stringr)
 library(Cairo)
 library(Matrix)
+library(ggalluvial)
 
 library(openxlsx)
 library(rstatix)
@@ -395,6 +397,15 @@ Feature_rast(CD4CD8, c('CCR6', 'RORC', 'FOXP3', 'DPP4', 'IL23R', 'IL17A', 'IL17F
 CD4CD8 %<>% 
   ScaleData(assay='CITE', features = rownames( .[['CITE']]), vars.to.regress= c('nCount_CITE', 'patient')) 
 
+
+CD4CD8@assays$CITE@data
+
+
+
+
+CD4CD8 %<>% 
+  ScaleData(assay='CITE', vars.to.regress= c('nCount_CITE', 'patient')) 
+
 # RNA vs CITE
 surfacemakers <- c('CD4','CD8A','CD8B', 'CXCR3','CCR6',  'ITGAE',   'CD69','CCR7','KLRB1','CD27','KLRG1', 'IL7R',
                    'DPP4', 'ITGA1', 'KLRD1', 'PTPRC', 'PDCD1')
@@ -414,10 +425,14 @@ ViolinPlot(CD4CD8, c('CD49a.protein', 'CD103.protein', 'CD4.protein', 'CD45RA.pr
 
 
 CITEpatients <- c('p27', 'p71', 'p77', 'p73')
-CD4CD8_cite <- subset(CD4CD8, patient %in% CITEpatients) %>% 
-  ScaleData(assay='CITE', features = rownames( .[['CITE']]), vars.to.regress= c('nCount_CITE', 'patient')) 
+CD4CD8_cite <- subset(CD4CD8, patient %in% CITEpatients) 
 DefaultAssay(CD4CD8_cite) <- 'CITE'
 
+CD4CD8_cite
+
+Feature_rast(CD4CD8, "PTPRC")
+
+Feature_rast(CD4CD8, "CD4.protein", assay = "CITE")
 
 Feature_rast(CD4CD8_cite, CD4CD8@assays$CITE %>%  rownames(), sz = 0.1, ncol = 5,assay = 'CITE')  %T>%
   figsave('CD4CD8_Citeseq_allmarkers_rast.pdf', 210, 170)
@@ -525,11 +540,11 @@ CD4CD8_cite@assays$CITE@scale.data
 
 
 (Feature_rast(CD4CD8_cite,
-              g = 'T_pheno',
-              #w facets = c('CD4CD8', 'tissue'),
+              g = "T_pheno",
+            facets = c('tissue'),  
               d1 ='CD45RA.protein', d2 =  'CD27.protein',
               colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
-              
+                
               # slot = 'scale.data',
               noaxis = F, assay = 'CITE',
               axis.number = T)+
@@ -540,6 +555,9 @@ CD4CD8_cite@assays$CITE@scale.data
 bc_naive <- colnames(   
   subset(CD4CD8_cite,CD27.protein > 0.5 &  CD45RA.protein > 1.2 )
   )
+
+
+# test <-  subset(CD4CD8_cite,CD27.protein > 0.5 &  CD45RA.protein > 1.2 )
 
 bc_cm <- colnames(   
   subset(CD4CD8_cite, CD27.protein > 0.5 &  CD45RA.protein <= 1.2 )
@@ -562,6 +580,25 @@ CD4CD8_cite@meta.data  %<>%  mutate(T_pheno= case_when(
   bc_backup %in% bc_tmra ~ 'Temra'
   
   )   )
+
+Feature_rast(CD4CD8_cite, 'T_pheno', facets = c('tissue'), 
+             colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev()
+) 
+
+
+(Feature_rast(CD4CD8_cite,
+              g = "T_pheno",
+              facets = c('tissue'),  
+              d1 ='CD45RA.protein', d2 =  'CD27.protein',
+              colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
+              
+              # slot = 'scale.data',
+              noaxis = F, assay = 'CITE',
+              axis.number = T)+
+    geom_hline(yintercept = 0.5, linewidth = 0.2)+
+    geom_vline(xintercept = 1.2,linewidth = 0.2)
+)
+
 
 
 Feature_rast(CD4CD8_cite, 'T_pheno', facets = c('tissue', 'CD4CD8'), 
@@ -692,22 +729,22 @@ Feature_rast(CD4CD8, c("integrated_snn_res.1.2", "Cell_cluster", "Cell_pheno"))
 
 
 Cell_pheno <-  c(
-  'TMRA_1_Lu',
+  'TMRA_1_LG',
   'TCM_2_M',
-  'TRM_3_Lu',
+  'TRM_3_LG',
   'Th17/Tc17_M',
   'Tfh_LN',
   'Naive_2_LN',
-  'TEMRA_2_Lu',
-  'TRM_2_Lu',
-  'unidentified_Lu',
+  'TEMRA_2_LG',
+  'TRM_2_LG',
+  'unidentified_LG',
   'TCM_3_M',
-  'TRM_1_Lu',
+  'TRM_1_LG',
   'TCM_1_M',
   'TCM_3_M',
-  'Naive_2_LN',
+  'Naive_2_LG',
   'TEM_M',
-  'TEMRA_1_Lu',
+  'TEMRA_1_LG',
   'Naive_1_LN',
   'Treg_LN'
   
@@ -723,15 +760,15 @@ phenotable$Cluster_pheno <- paste0(phenotable$Cell_cluster,': ', phenotable$Cell
 phenotable %<>% mutate(Cluster_pheno = factor(Cluster_pheno, levels = unique(Cluster_pheno)))
 
 phenotable
-
+CD4CD8$Cell_pheno <- Idents(CD4CD8)
 
 # CD4CD8@meta.data %<>%  left_join(phenotable, by = 'integrated_snn_res.1.4') %>% `rownames<-`(CD4CD8$bc_backup)
 CD4CD8@meta.data %<>%  left_join(phenotable, by = 'Cell_cluster', suffix = c('',''))  %>% 
   mutate(Cluster_pheno = factor(Cluster_pheno, levels = unique(Cluster_pheno))) %>% 
   
-  `rownames<-`(CD4CD8$bc_backup)
+  `rownames<-`(CD4CD8$bc_backup,"Cell_cluster")
 
-
+Feature_rast(CD4CD8)
 
 CD4CD8@meta.data %<>%  
   mutate(Cell_pheno = str_replace(Cell_pheno, "TMRA", "Temra")) 
@@ -789,13 +826,20 @@ UMAP_CD4CD8 <-(Feature_rast(CD4CD8, noaxis = F,sz = 0.3) +
 # change L to LN and P to Lu, pulm to Lung , LN to LLN
 
 CD4CD8@meta.data$Cell_pheno  %<>% str_replace("_P", "_Lu")
+CD4CD8@meta.data$Cell_pheno  %<>% str_replace("_Lu", "_LG")
 
+Feature_rast(CD4CD8, "Cell_pheno")
 CD4CD8@meta.data$Cell_pheno  %<>% str_replace("_L$", "_LN")
 CD4CD8@meta.data$tissue  %<>% str_replace("Pulm", "Lung")
 CD4CD8@meta.data$tissue  %<>% str_replace("LN", "LLN")
 
+CD4CD8@meta.data %<>%   mutate(
+  Cell_pheno = factor(Cell_pheno, levels = sort(unique(Cell_pheno)))
+  
+  
+)
 
-Feature_rast(CD4CD8, "tissue")
+Feature_rast(CD4CD8, "Cell_pheno")
 Idents(CD4CD8) <- CD4CD8$Cell_pheno
 
 saveRDS(CD4CD8, CD4CD8RDS)
@@ -981,6 +1025,9 @@ ClusterCompare(CD4CD8, "CD8_TRM_1_P", "CD8_TRM_2_P", group.by = "CD_pheno",log2f
 
 # gene signatrue scors ----------------------------------------------------
 
+
+
+
 colnames(CD4CD8@meta.data)
 
 CD4CD8$Cell_cluster %>% unique() %>% mixedsort()
@@ -997,19 +1044,12 @@ Feature_rast(CD4CD8, "Cell_pheno")
 
 CD4CD8@meta.data <- CD4CD8@meta.data[, 1:50]
 
-sigtable <- read.xlsx('abt/abd5778_Table_S3.xlsx',sheet = 1)
-
-colnames(sigtable) %<>%   str_remove('.\\(.+\\)')
-
-sigtable %<>% as.list() %>% map(~ na.exclude(.x) %>% as.vector)
-
+sigtable <- openxlsx::read.xlsx('abt/abd5778_Table_S3.xlsx') %>% 
+  `colnames<-`(str_remove(colnames(.), '.\\(.+\\)') ) %>%  as.list() %>% 
+  map(~ na.exclude(.x) %>% as.vector) %T>% print()
+ 
 names(sigtable)
-
 sigtable$Tissue.resident
-
-
-sigtable$Tregs
-
 
 #caculate scores
 for (i in names(sigtable)) {
@@ -1401,17 +1441,6 @@ top10DEG_heat <-
             group.colors = umap.colors,size = gs(8))%>%heat_theme() %T>% figsave('top10DEG.pdf', 190, 370)
 top10DEG_heat
 
-
-# Trm makrers 
-TrmMarker <- FindAllMarkers(subset(CD4CD8, Cell_cluster %in% paste0('C',13:18)),min.pct = 0.1, logfc.threshold = 0.5,assay = 'RNA')
-
-TrmMarker
-
-
-top15_TrmMarker <- TrmMarker %>% filter(!grepl('^RP|^MT', gene)) %>% 
-  arrange(cluster, desc(avg_log2FC))%>%
-  group_by(cluster) %>% top_n(15, avg_log2FC ) %>% as.data.frame()
-
  
 DoHeatmap(subset(CD4CD8, Cell_cluster %in% paste0('C',13:18)), features = top15_TrmMarker$gene) %>% heat_theme()
 
@@ -1435,9 +1464,10 @@ Cytlist <- read.table("Cytokine_gene_list.txt", header = T) %>% pull(Symbol) %>%
 Cytlist
 
 
-cd4cd828 <-ClusterCompare(CD4CD8, 'TRM_1_P', 'TRM_3_P', features = TFs_T)
-cd4cd828$plot
+cd4cd828 <-ClusterCompare(CD4CD8, 'TRM_1_LG', 'TRM_3_LG', features = TFs_T)
 
+
+cd4cd828$plot
 
 ClusterCompare(CD4CD8, 'TRM_1_P', 'TRM_3_P', features = Cytlist,genetoshow = 20)
 
@@ -1476,11 +1506,11 @@ DoHeatmap(subset(CD4CD8, Cell_pheno %in% inst_cls, downsample=500),features = to
 
 trmcl <- c(
   
-  # "TEM_M",
-  "Temra_1_P",
-  "TRM_1_P",
-  "TRM_2_P",
-  "TRM_3_P"
+   "TEM_M",
+  "Temra_1_LG",
+  "TRM_1_LG",
+  "TRM_2_LG",
+  "TRM_3_LG"
   # "Temra_2_P"
   
 )
@@ -1623,6 +1653,33 @@ Feature_rast(subset(CD4CD8, CD4CD8 %in% c('CD4', 'CD8')), 'CD_pheno', colorset =
 ClusterCompare(CD4CD8, 'CD4_Temra_1_P', 'CD8_Temra_1_P', group.by = 'CD_pheno')
 
 # SCENIC result -----------------------------------------------------------
+library(SCopeLoomR)
+library(SCENIC)
+
+
+loom <- open_loom('ABTlung_pyscenic/lungABT_output_tracks_nopara.loom')
+regulons_incidMat <- get_regulons(loom, column.attr.name="Regulons")
+regulons <- regulonsToGeneLists(regulons_incidMat)
+regulonAUC <- get_regulons_AUC(loom, column.attr.name='RegulonsAUC')
+
+AUCmat <- AUCell::getAUC(regulonAUC) 
+
+rownames(AUCmat)
+rownames(AUCmat)   %<>% gsub("\\(\\+\\)", "_REG", .)
+CD4CD8[['AUC']] <- CreateAssayObject(data = AUCmat)
+
+CD4CD8 <- ScaleData(CD4CD8, assay = 'AUC')
+
+DE_48_Reglon <- FindAllMarkers(CD4CD8, only.pos = T, assay = "AUC",min.pct = 0.25, test.use =  "bimod",slot = "scale.data")
+DE_48_Reglon
+DE_48_Reglon %>% filter(cluster == "TRM_1_LG")
+
+top5_48_reg <-  DE_48_Reglon %>% group_by(cluster) %>% top_n(5, avg_diff) %>%  pull(gene)
+
+
+DoHeatmap(CD4CD8, features = top5_48_reg, assay = "AUC") %>% heat_theme()
+DoHeatmap(CD4CD8 %>% subset(downsample = 500), features = top5_48_reg, assay = "AUC") %T>% figsave("top_reg_CD4CD8.pdf", 400, 400)
+
 
 adjabt <- vroom::vroom("ABTlung_pyscenic/adj_abt.csv")
 
@@ -1672,6 +1729,7 @@ dim(UMAPmeta)
 UMAPmeta$bc_backup == AUCcells$Cell
 
 UMAPmeta <-  FetchData(CD4CD8, c("CD4CD8", "UMAP_1", "UMAP_2", "Cell_pheno", "bc_backup"))
+UMAPmeta
 
 
 data_frame(UMAPmeta, AUCcells)
@@ -1691,6 +1749,9 @@ class(UMAPmeta %>% as.data.frame())
 
 Feature_rast(UMAPmeta, "RUNX3_REG")
 
+Feature_rast(CD4CD8, "RUNX3-REG", assay = "AUC")
+
+
 
 UMAPmeta$`GATA3(+)`
 
@@ -1709,7 +1770,7 @@ DEGreg %>% view()
 DEGreg   %<>% filter(p_val_adj < 0.01)
 view(DEGreg)
 
-ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "REG", log2fc = 0.01)
+ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "AUC", log2fc = 0.01)
 
 
 # GSEA --------------------------------------------------------------------
@@ -3306,24 +3367,47 @@ TRM_1_Th17_DEG$plot
 
 # F1A T cells sorting
 
-Sortting <- xlsx::read.xlsx(file = "LungTsorting .xlsx", sheetIndex = 1) %>%  pivot_longer(cols = varst,
-                                                                                           names_to = "Cell_Type",
-                                                                                           values_to = "Percent") %>% 
-  mutate(Percent = Percent * 100,
-         Cell_Type = str_replace_all(Cell_Type, "\\.", " ")) %T>% 
-  print()
+Sortting_s <- xlsx::read.xlsx(file = "LungTsorting .xlsx", sheetIndex = 1) %T>% print() 
+
+Sortting <- xlsx::read.xlsx(file = "LungTsorting .xlsx", sheetIndex = 1) %>%
+  rename("Total_T" = "Total_T_of_CD45") %>% 
+  reshape2::melt(
+  id.vars = c("donor", "Tissue"), 
+  value.name = "Percent")  %>% 
+  mutate(Percent = Percent * 100) %>% 
+  rename("variable" = "Cell_Type")%T>% 
+  print() 
+
+Sortting$Percent %>% unique
 
 
 pv_wilcox <- Sortting %>%   
+  group_by(Cell_Type) %>% 
+  wilcox_test(Percent ~ Tissue, paired = T,conf.level = 0.95, exact = TRUE, p.adjust.method = "fdr") %T>% print() 
+
+Sortting %>%   
   group_by(Cell_Type) %>%
-  wilcox_test(Percent ~ Tissue, paired = T) %>% select(Cell_Type, p)
+  wilcox_effsize(Percent ~ Tissue)
 
 
-F1A <- ggplot(Sortting, aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point()+geom_line(color = "grey")+ xlab(NULL)+ylab("% of CD45")+
-  facet_grid(~Cell_Type)+color_m(color = c("blue", "red"))+
-  theme_minimal()+mytheme+NoLegend()+ylim(0,51)+
-  stat_compare_means(aes(group = Tissue), label = "p", method = "wilcox", paired = T, size = gs(10))
+
+F1A <- ggplot(Sortting, aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point(size = 1)+
+  geom_line(color = "grey",linewidth = 0.2)+ xlab(NULL)+ylab("Percentage")+
+  facet_grid(~Cell_Type, shrink = T)+color_m(color = c("blue", "red"))+
+  theme_minimal()+mytheme+NoLegend()+
+  stat_compare_means(aes(group = Tissue), label = "p", method = "wilcox", paired = T, size = gs(8))
 F1A
+
+
+figsave(F1A, "subs
+        ets_of_totalT_and_CD45.pdf", w = 190, 60)
+
+ggplot(Sortting, aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point()+geom_line(color = "grey")+ xlab(NULL)+ylab("% of CD45")+
+  facet_wrap(~Cell_Type)+color_m(color = c("blue", "red"))+
+  theme_minimal()+mytheme+NoLegend()+
+  stat_compare_means(aes(group = Tissue), label = "p", 
+                     method = "wilcox", paired = T, size = gs(10))
+
 
 # F1C
 F1C <- (Feature_rast(CD4CD8, sz = 0.3,
@@ -3438,28 +3522,57 @@ GMS_long <- FetchData(CD4CD8, c("CD4CD8", "Cell_pheno", names(sigtable))) %>%
   reshape2::melt(value.name = "score" ) %>% 
   mutate(variable = if_else(variable =="CD8.Cytotoxictiy","Cytotoxicity",variable ) )
 
+names(sigtable)
+
+sigtable$Th1
+
 head(GMS_long)
 GMS_long$variable %>% unique()
 
-F2A <- (ggplot(GMS_long %>% filter(variable %in% c("Effectors", "Tissue.resident", "Naive", "Th17", "Cytotoxicity") & Cell_pheno != "unidentified_P" ) %>% 
+F2A <- (ggplot(GMS_long %>% filter(variable %in% c("Tissue.resident", "Tregs","Th17", "Cytotoxicity") & Cell_pheno != "unidentified_P" ) %>% 
          mutate(variable = factor(variable, 
-                                  level = c("Effectors", "Tissue.resident", "Naive", "Th17", "Cytotoxicity"))), 
+                                  level = c( "Tissue.resident", "Tregs", "Th17", "Cytotoxicity"))), 
        aes(x = Cell_pheno, y = score, fill = CD4CD8))+
   geom_violin_rast(size = 0.1) +
     facet_wrap(~variable, ncol = 1, strip.position = "right", scales = "free_y")+
   ylab("module score")+xlab(NULL)+
   geom_boxplot( alpha = 0.5, size = 0.1,notch = T,
                  outlier.alpha = 0,show.legend = FALSE)+
+    
   fill_m()+
     theme_bw()+
     mytheme+
-    guides(fill = guide_legend(title = "Cluster", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"))
+    guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
       
     )+
     
   theme(axis.text.x = element_text(size = 8 , angle = 90))
   
   ) %T>% print() 
+
+
+(ggplot(GMS_long %>% filter(Cell_pheno != "unidentified_P" ) , 
+        aes(x = Cell_pheno, y = score, fill = CD4CD8))+
+    geom_violin_rast(size = 0.1) +
+    facet_wrap(~variable, ncol = 1, strip.position = "right", scales = "free_y")+
+    ylab("module score")+xlab(NULL)+
+    geom_boxplot( alpha = 0.5, size = 0.1,notch = T,
+                  outlier.alpha = 0,show.legend = FALSE)+
+    
+    fill_m()+
+    theme_bw()+
+    mytheme+
+    guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
+           
+    )+
+    
+    theme(axis.text.x = element_text(size = 8 , angle = 90))
+  
+) %T>% print() 
+
+
+
+
 
 F2B <-  Feature_rast(CD4CD8_cite, 
                      c( "CD196.protein", "CD26.protein", "CD161.protein", "CD127.protein",
@@ -3472,9 +3585,22 @@ F2B <-  Feature_rast(CD4CD8_cite,
 
 
 
-PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6)) %T>%  figsave("Fig2ABtest.pdf", 200, 120)
+PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6)) %T>%  print()
 
 
+
+trmcl <- c(
+  
+  "TEM_M",
+  "Temra_1_LG",
+  "TRM_1_LG",
+  "TRM_2_LG",
+  "TRM_3_LG"
+  # "Temra_2_P"
+  
+)
+
+Feature_rast(CD4CD8)
 
 F2C <-( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
                                  features = rev(c(unique(top10TF_TRM$gene), "TOX", "RORC"))
@@ -3499,6 +3625,8 @@ F2C <-( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
                              size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom'))+
   NoLegend()
 )  %T>% print()
+
+
 
 CTG <- CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% trmcl) %>% 
   group_by(gene) %>% 
@@ -3681,9 +3809,22 @@ CD4CD8_meta %>%  filter(Cell_pheno %in% c("TRM_1_Lu", "TRM_3_Lu", "Naive_1_L", "
   ggplot(aes(x = Cell_pheno, y = length_TRB))+ geom_boxplot_jitter() +facet_grid(CD4CD8 ~ patient)
 
 
+library(data.table)
+
+fwrite(CD4CD8[["RNA"]]@data %>% as.data.frame(), "abt/Normalized_count_CD4CD8.csv", row.names = T)
+
+fwrite(data.frame(FetchData(CD4CD8, c("UMAP_1", "UMAP_2")), CD4CD8@meta.data),
+          "abt/CD4CD8lung_meta.csv", row.names = T)
 
 
+CD4CD8@meta.data %>% filter(!is.na(cdr3_TRB)) %>% count(patient, CD4CD8)
 
+Feature_rast(CD4CD8 %>% subset(CD4CD8 == "CD4"), "cdr3_TRB_perc", facets="patient", navalue = "transparent")
 
+Feature_rast(CD4CD8 %>% subset(CD4CD8 == "CD4" & patient == "p25"),
+             "cdr3_TRB_freq", navalue = "transparent", 
+             colorgrd = rev(brewer.pal(n = 11, name = "Spectral")))
 
-
+Feature_rast(CD4CD8 %>% subset(CD4CD8 == "CD4" & patient == "p25"),
+             "cdr3_TRB_freq", navalue = "transparent", 
+             colorgrd = rev(brewer.pal(n = 11, name = "Spectral")))

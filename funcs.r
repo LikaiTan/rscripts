@@ -86,8 +86,10 @@ gglp <- function(p = 'n', s= 3) {
 
 
 
-ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL, rm = "^MT|^RP", test = 'bimod', 
-                           p_cutoff = 0.05, assay = 'RNA', do.plot = TRUE, group.colors = NULL, features = NULL,
+ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
+                           rm = "^MT|^RP", test = 'bimod', 
+                           p_cutoff = 0.05, assay = 'RNA', slot = "data",
+                           do.plot = TRUE, group.colors = NULL, features = NULL,
                            min.pct = 0.1, genetoshow = 50, ds = 500) {
   DefaultAssay(ob) <- assay
     if (!is.null(group.by)) {
@@ -95,11 +97,9 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL, rm = "^MT
     }
   result <- c()
   result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
-                               logfc.threshold = log2fc, min.pct = min.pct,
+                               logfc.threshold = log2fc, min.pct = min.pct, slot = slot,
                                test.use = test)%>%
-    tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>%
-    dplyr:: arrange(desc(avg_log2FC))%>%
-    dplyr::  mutate(pct.dff = pct.1 - pct.2)
+    tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>% dplyr:: arrange(desc(avg_log2FC )) %>% dplyr::  mutate(pct.dff = pct.1 - pct.2)
 
     result$table <- result$table %>%
       dplyr:: filter(!grepl(rm, gene) )
@@ -163,7 +163,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
                          colorgrd =  c("#eff4ff", "#ffcc66", "red", "#990000"),
-                         navalue =alpha('lightgrey', 0.4) ) {
+                         navalue ="transparent" ) {
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,

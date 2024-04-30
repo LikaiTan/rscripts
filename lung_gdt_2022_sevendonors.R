@@ -101,7 +101,7 @@ figsave(QC_scatter,'beforeQC_scatter.pdf',600,250)
 # clean 
 GDTlung %<>% map(.,~ subset(.x, subset =  nCount_RNA %in% 1100:7000 &
                               nFeature_RNA %in% 400:2000 &  percent.mito <25&
-                              tissue %in% c('Pulm', 'LN')) 
+                              tissue %in% c('Lung', 'LLN')) 
 )
 dim(GDTlung$p1)
 dim(GDTlung$p23)
@@ -322,7 +322,7 @@ ClusterCompare(GDTlung_s,'1','8',group.by = 'integrated_snn_res.1' , log2fc = 0.
 
 # GDTlung_s$Cell_cluster <- Idents(GDTlung_s) 
 
-GDTlung_s$tissue  %<>% str_replace_all('luLN', 'LN') %>% str_replace_all('lung', 'Pulm')
+GDTlung_s$tissue  %<>% str_replace_all('LN', 'LLN') %>% str_replace_all('Pulm', 'Lung')
 
 
 GDTlung_s$ID <- paste0(GDTlung_s$tissue,'_',GDTlung_s$patient)
@@ -952,6 +952,16 @@ Feature_rast(GDTlung_s, c('Trm','Cell_cluster'))
 # # change L to LN and P to Lu, pulm to Lung , LN to LLN
 GDTlung_s$Cell_cluster  %<>% str_replace("_L", "_LN")
 GDTlung_s$Cell_cluster  %<>% str_replace("_P", "_Lu")
+GDTlung_s$Cell_cluster  %<>% str_replace("_Lu", "_LG")
+
+GDTlung_s$Cell_cluster  %<>% str_replace("_LG3", "_L2G4")
+
+GDTlung_s$Cell_cluster  %<>% str_replace("_LG4", "_LG3")
+GDTlung_s$Cell_cluster  %<>% str_replace("_L2G4", "_LG4")
+
+
+
+Feature_rast(GDTlung_s, "Cell_cluster")
 
 
 Idents(GDTlung_s) <- GDTlung_s$Cell_cluster %>% factor(levels = sort(unique(GDTlung_s$Cell_cluster)))
@@ -1859,8 +1869,6 @@ Total_list <- GDTlung_s@meta.data %>% mutate(aa = cdr3_TRD) %>% filter(!is.na(cd
   split(f = .$Cluster.no)
 
 
-Total_list1.1 <- GDTlung_s@meta.data %>% mutate(aa = cdr3_TRD) %>% filter(!is.na(cdr3_TRD))   %>%  
-  split(f = .$integrated_snn_res.1.1)
 
 
 Total_list1.trimmed <- GDTlung_trimmed@meta.data %>% mutate(aa = cdr3_TRD) %>%
@@ -1901,7 +1909,7 @@ repOverlap(immdata$data, .method = "morisita")
 
 Mori_result_TRD <- repOverlap(Total_list1.trimmed_tcR, .method = "morisita", .verbose = F, .col = "nt")
 
-vis(Mori_result)+ 
+vis(Mori_result_TRD)+ 
   # ggtitle('Morisita index')+
   scale_fill_gradientn( na.value = 'white',
                         colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))+
@@ -1917,17 +1925,6 @@ glimpse(Total_list1.trimmed_tcR)
 immdata$data$MS1$Clones %>%  range
 
 
-
-
-
-
-
-Morisita_GDTlung
-
-clonalOverlap(Total_list1.1, cloneCall="cdr3_TRD", method="morisita")
-
-clonalOverlap(Total_list[c(1,2,8)], cloneCall="cdr3_TRD", method="morisita")
- 
 
 
 
@@ -2036,12 +2033,76 @@ giniindex_GDT
 
 
 # SCENIC result -----------------------------------------------------------
+# 
+# loom <- open_loom('GDTlung_pyscenic/lung_output_tracks.loom')
+# regulons_incidMat <- get_regulons(loom, column.attr.name="Regulons")
+# regulons <- regulonsToGeneLists(regulons_incidMat)
+# regulonAUC <- get_regulons_AUC(loom, column.attr.name='RegulonsAUC')
+# 
+# dim(regulonAUC)
+# AUCmat <- AUCell::getAUC(regulonAUC) 
+# 
+# glimpse(AUCmat)
+# rownames(AUCmat)
+# rownames(AUCmat)   %<>% gsub("\\(\\+\\)", "_REG", .)
+# 
+# names(regulons) %<>%  gsub("\\(\\+\\)", "_REG", .)
+# 
+# print(AUCmat)
+# 
+# colnames(AUCmat)
+# 
+# GDTlung_s[['AUC']] <- CreateAssayObject(data = AUCmat)
+# 
+# GDTlung_s <- ScaleData(GDTlung_s, assay = 'AUC')
+# 
+# DE_Reglon <- FindAllMarkers(GDTlung_s, only.pos = T, assay = "AUC",min.pct = 0.25, test.use =  "wilcox", slot = "scale.data")
+
+nrow(D)
+DE_Reglon %>%  filter(cluster == "gd_TRM_Lu6")
+
+
+
+ClusterCompare(GDTlung_s, id1 = "gd_TRM_LG6", id2 = "gd_TEMRA_LG3", 
+               assay = "AUC",  log2fc = 0.25)
+
+
+
+
 
 gdAUCcells <- vroom::vroom("GDTlung_pyscenic/lung_output_tracks_no_parameter.csv")  %>% `colnames<-`(
   gsub("\\(\\+\\)", "_REG", colnames(.) )  
-)
+) %>%  column_to_rownames("Cell") %>% t()
+  
+GDTlung_s[['AUC']] <- NULL
+GDTlung_s[['AUC']] <- CreateAssayObject(data = gdAUCcells)
 
-gd_regulon 
+
+
+GDTlung_s <- ScaleData(GDTlung_s, assay = 'AUC')
+
+DE_Reglon <- FindAllMarkers(GDTlung_s, only.pos = T, assay = "AUC",min.pct = 0.25, test.use =  "wilcox", slot = "scale.data")
+
+
+top5_reg <-  DE_Reglon %>% group_by(cluster) %>% top_n(5, avg_diff) %>%  pull(gene)
+
+
+DoHeatmap(GDTlung_s, features = top5_reg, assay = "AUC") %>% heat_theme()
+
+ClusterCompare(GDTlung_s, id1 = "gd_TRM_LG6", id2 = "gd_TEMRA_LG3", 
+               assay = "AUC",  log2fc = 0.25)
+
+
+ClusterCompare(GDTlung_s, id1 = "gd_TRM_LG6", id2 = "Vg9Vd2_M", 
+               assay = "AUC",  log2fc = 0.25)
+
+
+Feature_rast(GDTlung_s, assay = "AUC", slot = "scale.data", g = "RORC-REG")
+
+# AUCmat <- AUCell::getAUC(vroom::vroom("GDTlung_pyscenic/lung_output_tracks_no_parameter.csv"))
+
+rownames(AUCmat)
+
 
 colnames(gdAUCcells) 
 
@@ -2055,23 +2116,21 @@ gdAUCcells$Cell <- NULL
 GDTlung_s@meta.data  %<>%  select_at(.vars = vars(-contains("_REG")))
 
 
+GDTlung_s@meta.data$RORC_REG <- NULL
+
 gdAUCcells
 
 GDTlung_s@meta.data  %<>% left_join(gdAUCcells, by = "bc_backup") %>% 
   `rownames<-`(GDTlung_s$bc_backup)
 
-Feature_rast(GDTlung_s, c( "RORC_REG"),
-             othertheme =  scale_colour_gradient2(
-               low = "blue",
-               mid = "white",
-               high ="red",
-               # midpoint = 1,
-               space = "Lab",
-               na.value = "grey50",
-               guide = "colourbar",
-               aesthetics = "colour"
-             ))
+Feature_rast(GDTlung_s, c( "RORC_REG"),sz = 0.1
+             )
 
+Feature_rast(GDTlung_s, c( "RORC-REG"),sz = 0.1, assay = "AUC", slot = "scale.data"
+)
+
+
+ViolinPlot(GDTlung_s, "RORC_REG")
 
 UMAPmeta <-  FetchData(CD4CD8, c("CD4CD8", "UMAP_1", "UMAP_2", "Cell_pheno", "bc_backup"))
 
@@ -2089,6 +2148,9 @@ class(UMAPmeta %>% as.data.frame())
 
 Feature_rast(UMAPmeta, "RUNX3_REG")
 
+gdregs <- GDTlung_s@meta.data %>%   select_at(.vars = vars(contains(c("_REG", "Cell_cluster"))))
+
+write_csv(gdregs, "gdreg.csv")
 
 UMAPmeta$`GATA3(+)`
 
@@ -2114,10 +2176,11 @@ ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "REG", log2fc = 0.01)
 
 # GSEA --------------------------------------------------------------------
 
-TRMvsTEMRA <- entrezlist_generator(GDTlung_s, 'gd_TRM_P6', 'gd_TEMRA_P4')
+TRMvsTEMRA <- entrezlist_generator(GDTlung_s, 'gd_TRM_LG6', 'gd_TEMRA_LG3')
 
 library(clusterProfiler)
 library(msigdbr)
+library(org.Hs.eg.db)
 Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
   dplyr::select(gs_name, entrez_gene)
 
@@ -2133,11 +2196,21 @@ GO<-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = '
   dplyr::select(gs_name, entrez_gene)
 
 
+ALLINONE <- rbind(Mc7,HALLMARK,KEGG,GO)
+
+ALLINONE
+
+
+GSEA_TRMvsTEMRA_allref<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=ALLINONE,  
+                       minGSSize    = 15,
+                       pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% 
+  setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+
 GSEAp2p8hallmark<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=HALLMARK,  
                        minGSSize    = 15,
                        pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 
-view(GSEAp2p8hallmark@result)
+view(GSEA_TRMvsTEMRA_allref@result)
 
 # GSEAp2p8GO<-GSEA(geneList = p2p8en, TERM2GENE=GO,  nPerm = 100000, 
 #                  minGSSize    = 15,
@@ -2224,16 +2297,178 @@ GSEA_multipplot(GSEAp4p6KEGG,description_to_show = c('KEGG_T_CELL_RECEPTOR_SIGNA
                 
                 c1='P6', c2 = 'P4' )
 
+GSEA_multipplot(GSEA_TRMvsTEMRA_allref,description_to_show = c('GSE25087_TREG_VS_TCONV_ADULT_UP', 'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY'), base_size = 8,legend.position = 'bottom',
+                title = "KEGG GSEA TRM vs TEMRA",
+                
+                c1='TRM_LG6', c2 = 'TEMRA_LG3' )
 
 
 
 GSEAp2p8KEGG@result$ID
 
 
-view(GSEAp4p6KEGG@result)
+view(GSEA_TRMvsTEMRA_allref@result)
 
 
 
+# proportion of gdTs and CD4CD8s in each patient --------------------------
+
+library("Hmisc")
+library(corrplot)
+
+gdTp <- table(GDTlung_s$patient, GDTlung_s$Cell_cluster) %>% prop.table(margin = 1)*100
+
+
+gdCl <- colnames(gdTp)
+
+abTp <- table(CD4CD8$patient, CD4CD8$Cell_pheno)%>% prop.table(margin = 1)*100
+
+abCl <- colnames(abTp)
+
+
+Tp <- cbind(gdTp, abTp) %>% as.data.frame()
+
+Tp$patient <- rownames(Tp)
+
+
+
+Feature_rast(CD4CD8)
+
+Feature_rast(Tp, g = "patient", d1 = "gd_TRM_LG6", d2 = "TRM_3_LG", noaxis = F, axis.number = T, sz = 3)
+
+Feature_rast(Tp, g = "patient", d1 = "gd_TEMRA_LG3", d2 = "Temra_1_LG", noaxis = F, axis.number = T, sz = 3)
+
+r36 <- cor.test(Tp$gd_TRM_LG6, Tp$TRM_3_LG, method = "spearman")
+
+r36$p.value
+r36$estimate
+
+
+
+
+
+result2 <- rcorr(as.matrix(Tp %>% select(-"patient")),type = 'spearman')
+
+result2
+
+result2$r
+result2$n
+
+corrplot(result2$r, type="lower", col = rev(COL2('RdBu', 200)),
+         p.mat = result2$P, sig.level = 0.1, insig = "blank")
+
+
+
+corrplot(result2$P, type="lower", 
+         p.mat = result2$P, sig.level = 0.1, insig = "blank", col.lim = c(0,1))
+
+?corrplot
+
+
+library(pwr)
+
+
+pwr.r.test(
+  n = 7,
+  r = 0.5,
+  sig.level = NULL,
+  power = 0.8,
+  alternative = 'two.sided'
+)
+
+install.packages("presize")
+
+
+
+# if we only look at cells from lung?
+
+gdl <- GDTlung_s@meta.data %>%  filter(tissue == "Lung"  & !grepl("LN", Cell_cluster) ) 
+abl <-  CD4CD8@meta.data %>%  filter(tissue == "Lung"& !grepl("LN", Cell_pheno)) %>% 
+  mutate(Cell_pheno = as.character(Cell_pheno))
+
+gdTp <-  table(gdl$patient, gdl$Cell_cluster) %>% prop.table(margin = 1)*100
+abTp <-  
+  table(abl$patient, abl$Cell_pheno) %>% prop.table(margin = 1)*100  
+Tp <- cbind(gdTp, abTp) %>% as.data.frame()
+as.matrix(Tp)
+
+result_lung <- rcorr(as.matrix(Tp),type = 'spearman')
+
+result_lung
+
+corL <-  corrplot(result_lung$r, type="lower", col = rev(COL2('RdBu', 200)),tl.col="black",
+         p.mat = result_lung$P, 
+         sig.level = 0.01, insig = "blank") 
+
+corL
+
+Tp
+Feature_rast(Tp, g = "gd_TRM_LG7", d1 = "gd_TRM_LG6", d2 = "TRM_3_LG", noaxis = F, axis.number = T, sz = 3)
+Tpd <- Tp %>% as.data.frame() %>%  rownames_to_column("patient")
+
+Feature_rast(Tpd , g = "patient",do.label = F,
+             d1 = "gd_TEMRA_LG3", d2 = "Temra_1_LG", noaxis = F, 
+             axis.number = T, sz = 3)+
+  geom_smooth(method = "lm", se = F)+
+  stat_cor(method = "spearman")
+
+Feature_rast(Tpd , g = "patient",do.label = F,
+             d1 = "gd_TEMRA_LG4", d2 = "Temra_2_LG", noaxis = F, 
+             axis.number = T, sz = 3)+
+  geom_smooth(method = "lm", se = F)+
+  stat_cor(method = "spearman")
+
+Feature_rast(Tpd , g = "patient",do.label = F,
+             d1 = "gd_TRM_LG5", d2 = "TCM_3_M", noaxis = F, 
+             axis.number = T, sz = 3)+
+  geom_smooth(method = "lm", se = F)+
+  stat_cor(method = "spearman")
+
+Feature_rast(Tpd , g = "patient",do.label = F,
+             d1 = "gd_TEMRA_LG4", d2 = "TCM_2_M", noaxis = F, 
+             axis.number = T, sz = 3)+
+  geom_smooth(method = "lm", se = F)+
+  stat_cor(method = "spearman")
+
+
+Feature_rast(Tpd , g = "patient",do.label = F,
+             d1 = "gd_Naive_LN1", d2 = "Naive_1_LN", noaxis = F, 
+             axis.number = T, sz = 3)+
+  geom_smooth(method = "lm", se = F)+
+  stat_cor(method = "spearman")
+
+
+
+
+gdln <- GDTlung_s@meta.data %>%  filter(tissue == "LLN") 
+abln <-  CD4CD8@meta.data %>%  filter(tissue == "LLN")
+
+gdTpln <-  table(gdln$patient, gdln$Cell_cluster) %>% prop.table(margin = 1)*100
+abTpln <-  
+  table(abln$patient, abln$Cell_pheno) %>% prop.table(margin = 1)*100  
+Tpln <- cbind(gdTpln, abTpln) %>% as.data.frame()
+
+
+result_ln <- rcorr(as.matrix(Tpln),type = 'spearman')
+
+corrplot(result_ln$r, type="lower", col = rev(COL2('RdBu', 200)),
+         p.mat = result_ln$P, sig.level = 0.01, insig = "blank")
+
+
+
+gdcor <-  rcorr(cbind(gdTp, gdTpln) %>% as.matrix(),type = 'spearman') 
+  corrplot(gdcor[['r']], type="lower", col = rev(COL2('RdBu', 200)),
+           p.mat = gdcor[['P']], sig.level = 0.05, insig = "blank")
+
+
+rcorr(cbind(gdTp, gdTpln) %>% as.matrix(),type = 'spearman') %>% print(.[["n"]]+ .[["P"]])
+
+
+
+abcor <-  rcorr(cbind(abTp, abTpln) %>% as.matrix(),type = 'spearman') 
+corrplot(abcor[['r']], type="lower", col = rev(COL2('RdBu', 200)),
+         p.mat = abcor[['P']], sig.level = 0.01, insig = "blank")
+                                                                                                                                                                                                                                             print(result_ln[["n"]])
 # !!!!!!!!!!!stop!!!!!!!!!!!!!!!!!!!! -------------------------------------
 
 
@@ -2813,16 +3048,16 @@ data_long <- melt(Mori_result_TRD, id.vars = "Unnamed: 0")
 
 
 data_long  %<>% mutate(Category.Var1 = case_when(
-  Var1  == "L1" ~ "Naive",
-  Var1 %in% c("L2", "L3", "L4") ~ "LN_memory",
-  Var1 %in% c("P1", "P2", "P3", "P4") ~ "Lung_memory",
-  Var1 %in% c("P5", "P6", "P7") ~ "Lung_TRM"
+  Var1  == "LN1" ~ "Naive",
+  Var1 %in% c("LN2", "LN3", "LN4") ~ "LN_TEM",
+  Var1 %in% c("LG1", "LG2", "LG3", "LG4") ~ "Lung_TEMRA",
+  Var1 %in% c("LG5", "LG6", "LG7") ~ "Lung_TRM"
 ),
 Category.Var2 = case_when(
-  Var2  == "L1" ~ "Naive",
-  Var2 %in% c("L2", "L3", "L4") ~ "LN_memory",
-  Var2 %in% c("P1", "P2", "P3", "P4") ~ "Lung_memory",
-  Var2 %in% c("P5", "P6", "P7") ~ "Lung_TRM"
+  Var2  == "LN1" ~ "Naive",
+  Var2 %in% c("LN2", "LN3", "LN4") ~ "LN_TEM",
+  Var2 %in% c("LG1", "LG2", "LG3", "LG4") ~ "Lung_TEMRA",
+  Var12 %in% c("LG5", "LG6", "LG7") ~ "Lung_TRM"
 )
 )
 
@@ -2842,18 +3077,19 @@ F5A
 library(ComplexHeatmap)
 library(circlize)
 
-categories <- ifelse(colnames(Mori_result_TRD) %in% c("L1", "L2", "L3", "L4"), "LN",
-                     ifelse(colnames(Mori_result_TRD) %in% c("P1", "P2", "P3", "P4"), "Lung_Temra",
-                            "Lung_Trm"))
-col_map <- c("LN" = "red", "Lung_Temra" = "green", "Lung_Trm" = "blue")
-col_map <- c("LN" = umap.colors[1], "Lung_Temra" = umap.colors[3], "Lung_Trm" = umap.colors[6])
+categories <- ifelse(colnames(Mori_result_TRD) %in% c("LN1", "LN2", "LN3", "LN4"), "LN_TEM",
+                     ifelse(colnames(Mori_result_TRD) %in% c("LG1", "LG2", "LG3", "LG4"), "Lung_TEMRA",
+                            "Lung_TRM"))
+# col_map <- c("LN_TEM" = "red", "Lung_TEMRA" = "green", "Lung_TRM" = "blue")
+col_map <- c("LN_TEM" = umap.colors[1], "Lung_TEMRA" = umap.colors[3], "Lung_TRM" = umap.colors[6])
 
 
 # Create a HeatmapAnnotation object for the color bar
 ha <- HeatmapAnnotation(df = data.frame(Category = factor(categories, levels = names(col_map))),
+                        show_legend = F,
                         col = list(Category = col_map),
-                        show_annotation_name = FALSE)
-
+                        show_annotation_name = F)
+ha
 # Create the heatmap
 F5A <-  Heatmap(Mori_result_TRD,
         name = "Morisita Index", 
@@ -2873,9 +3109,9 @@ F5A <-  Heatmap(Mori_result_TRD,
         top_annotation = ha
             )  
 F5A
-F5A <- draw(F5A, heatmap_legend_side="bottom", annotation_legend_side="right",
+F5A1 <- draw(F5A, heatmap_legend_side="bottom", annotation_legend_side="right",
      legend_grouping = "original") %>% grid.grabExpr() %>% ggplotify::as.ggplot()
-
+F5A1
 TCRfreqtable$TCRfreq
 
 
@@ -2979,7 +3215,7 @@ F5D <- GSEA_multipplot(GSEAp4p6KEGG,description_to_show = c('KEGG_T_CELL_RECEPTO
                        title = "GSEA Cytotoxictiy",
                        
                        c1='P6', c2 = 'P4' )
-
+view(GSEAp4p6_c7)
 
 F5E <- GSEA_multipplot(GSEAp4p6_c7,description_to_show = c(
   'GSE25087_TREG_VS_TCONV_ADULT_UP',
@@ -3113,3 +3349,40 @@ Feature_rast(GDTlung_s,
                guide = "colourbar",
                aesthetics = "colour"
              ) ) 
+
+
+
+Feature_rast(GDTlung_s, facets = "patient") %T>%  figsave("GDT_seven_pt.pdf", 400, 400)
+
+
+Feature_rast(CD4CD8, facets = "patient") %T>%  figsave("CD4CD8_seven_pt.pdf", 400, 400)
+
+
+data.table::fwrite(GDTlung_s[["RNA"]]@data %>% as.data.frame(), "Normalized_count_gdtlung.csv", row.names = T)
+
+ data.table::fwrite(data.frame(FetchData(GDTlung_s, c("UMAP_1", "UMAP_2")), GDTlung_s@meta.data), 
+          "GDTlung_meta.csv", row.names = T)
+
+
+allMetagdt <- data.frame(FetchData(GDTlung_s, c("UMAP_1", "UMAP_2")), GDTlung_s@meta.data) %>%  filter(!is.na(cdr3_TRD) & Cell_cluster != "Vg9Vd2_M")
+
+
+allMetagdt %>% Feature_rast("v_gene_TRD", sz = 1.5)
+
+allMetagdt$table()
+
+
+allMetagdt$v_gene_TRD %>% table()
+
+
+
+GDTlung_s$Vg9Vd2
+
+Feature_rast(GDTlung_s, "Vg9Vd2")
+
+
+
+Feature_rast(GDTlung_s, "GM_D",
+             colorgrd =  c("#eff4ff", "#eff4ff", "purple", "#990000"),
+             navalue ="transparent" 
+             )

@@ -65,6 +65,7 @@ md <-  data.frame(
 
 md
 
+read.flow
 
 ###input trimmed FCS file
 FCS_raw_totalT <- read.flowSet(
@@ -92,10 +93,14 @@ for (i in file_name) {
 #              probs = c(0.01, 0.2, 0.5, 0.75, 0.99))
 
 
+FCS_raw_totalT@frames[["TotalT_LN1_p254_T4047_Live_T_cells.fcs"]]@parameters@data
+
+
+
 ##panels
 panel <- FCS_raw_totalT@frames[[file_name[1]]]@parameters@data[, 1:2 ]
 nrow(panel)
-
+panel
 # panel_fcs <- parameters(FCS_raw_totalT[[1]]) %>% Biobase::pData()
 panel$desc <- gsub("-","",panel$desc)
 Channel <- colnames(FCS_raw_totalT)
@@ -149,7 +154,7 @@ functional_markers <-c('Vd1','Vd2','CD3',"TCRgd", 'TCRab', 'AREG', 'Gzma', 'GMCS
 
 # ##biexpontential transform of data --------------------------------------
 
-
+file_name[1]
 ##############check rawdata distribution
 rawdata <- FCS_raw_totalT@frames[[file_name[1]]]@exprs[,7:32] %>% asinh()
 rawdata
@@ -233,7 +238,7 @@ fcs_totalT_transform <- fcs_totalT_transform[sampleNames(fcs_totalT_transform), 
 
 
 #the a value will decide how much the negative values will be put together
-testraw <-FCS_raw@frames[[file_name[1]]]
+testraw <-FCS_raw_totalT@frames[[file_name[1]]]
 file_name[[1]]
 
 
@@ -337,7 +342,7 @@ ID <-  rep(md$ID, fsApply(fcs_totalT_transform , nrow))
 
 ## Diagnostic plots
 ggdf <- data.frame(sample_id = sample_ids, tissue, donor, ID, expr)
-ggdf %>% head
+ ggdf %>% head
 ##transfor the ggdf to long table
 ggdf <- melt(ggdf, id.var = c('sample_id','tissue',
                               'donor', 'ID'
@@ -347,6 +352,7 @@ ggdf %>% head
 # mm <- match(ggdf$sample_id, md$sample_id)
 # ggdf$condition <- md$condition[mm]
 
+dim(ggdf)
 ##downsample
 
 
@@ -379,6 +385,8 @@ nrow(ggdf_ds)
 
 table(ggdf_ds$sample_id)
 
+ggdf_ds
+
 histog_allmarkers <-ggplot(ggdf_ds, aes(x = expression, color = ID,
                           group = ID)) +
   geom_density() +
@@ -388,7 +396,7 @@ histog_allmarkers <-ggplot(ggdf_ds, aes(x = expression, color = ID,
         strip.text = element_text(size = 7), axis.text = element_text(size = 5)) +
   guides(color = guide_legend(ncol = 1)) 
 
-histog_allmarkers %>%  figsave('hist_permeabilization_without_batch_correction_lung_totalT_foursample.pdf', 300, 300)
+histog_allmarkers %T>%  figsave('hist_permeabilization_without_batch_correction_lung_totalT_foursample.pdf', 300, 300)
 
 
 

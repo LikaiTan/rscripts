@@ -615,8 +615,8 @@ F6A <- Feature_rast(GDTcell_adams, c("ident"),
              sz = 1, noaxis = F)
 
 F6B <- Feature_rast(GDTcell_adams, c("Disease"),
-             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 3),
-             sz = 1, noaxis = F)
+             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 12),
+             sz = 1, noaxis = F) %T>% print() 
 
 
 F6AB <- PG(list(F6A, F6B), ncol = 1, align = "hv", axis  = "r", labels = "AUTO") %T>% print() 
@@ -671,6 +671,8 @@ F6DE <- PG(list(F6D, F6E), labels = c("D","E"), ncol = 2)%T>%
 
 
 
+GSEACP12@result %>%  filter(ID == "KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY")
+
 F6DE
 
 
@@ -683,3 +685,12 @@ F6 <- (PG(list(F6ABC, F6DE), ncol = 1, rh = c(1, 1))+
   print() %>% figsave("Fig6_publicdata.2.pdf", 160, 130)
 
 
+Feature_density(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', "ENTPD1",
+                                
+                                "KLRG1",  'ITGB2', 'GZMB', "PRF1") ,
+             sz = 1, ncol = 4) 
+
+Feature_rast(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', "ENTPD1",
+                                
+                                "KLRG1",  'ITGB2', 'GZMB', "PRF1") ,
+                sz = 1, ncol = 4) 
