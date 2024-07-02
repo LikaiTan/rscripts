@@ -162,8 +162,9 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
-                         colorgrd =  c("#eff4ff", "#ffcc66", "red", "#990000"),
+                         colorgrd = "grd1",
                          navalue ="transparent" ) {
+
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
@@ -179,6 +180,22 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
     fd <- fd
   }
 
+  # gradient color define 
+  color_list1 <- c( alpha(c("#D4EDF7", "#347B99"), 0.5), "#4424D6", "#110934")  # Example colors
+  color_list2 <- c(alpha(c("#F0F7D4", "#B2D732"),0.5), "#347B11", "#092834")  # Example colors
+  
+  # Determine the color gradient to use
+  if (length(colorgrd) == 1 && colorgrd == 'grd1') {
+    colors <- color_list1
+  } else if ( length(colorgrd) == 1 && colorgrd == 'grd2') {
+    colors <- color_list2
+  } else if (length(colorgrd) > 1 && is.vector(colorgrd) ) {
+    colors <- colorgrd
+  } else {
+    stop("Invalid colorgrd value. Use 1, 2, or a vector of color hex codes.")
+  }
+  
+  
   ###one variable
   if (length(g) == 1) {
     (if (isTRUE(is.numeric(fd[[g]]) & isTRUE(sort))){
@@ -197,7 +214,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
       #color
       (if (isTRUE(is.numeric(fd[[g]]))){ 
         scale_colour_gradientn(
-          colors = colorgrd,
+          colors = colors,
           space = "Lab",
           na.value = navalue,
           guide = "colourbar",
@@ -247,7 +264,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
         #color
         (if (isTRUE(is.numeric(as.vector(fd[[i]])))){
           scale_colour_gradientn(
-            colors = colorgrd,
+            colors = colors,
             space = "Lab",
             na.value = navalue,
             guide = "colourbar",

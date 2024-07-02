@@ -692,7 +692,7 @@ rownames(GDTlung_cite@assays$CITE@counts )
 abnames <- paste0(c('CD4', 'CD8','CD45RA', 'CD45RO', 'PD1', 'CXCR3', 'CCR6','CD103', 'CD69', 'CCR7',
                     'KLRB1', 'CD27', 'KLRG1', 'IL7R', 'CD26', 'CD49a', 'KLRD1'), '.protein')
 
-Feature_rast(GDTlung_cite, abnames, assay = 'CITE', sz = 0.2)
+Feature_rast(GDTlung_cite, abnames, assay = 'CITE', sz = 0.2, colorgrd = "grd2")
 
 
 
@@ -796,7 +796,7 @@ Feature_rast(GDTlung_cite ,
 
 
 (Feature_rast(GDTlung_cite,
-              g = 'pheno',
+              g = 'T_pheno',
               #w facets = c('CD4CD8', 'tissue'),
               d1 ='CD45RA.protein', d2 =  'CD27.protein',
               colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 6) %>% rev(),
@@ -810,47 +810,24 @@ Feature_rast(GDTlung_cite ,
 
 
 
-(Feature_rast(GDTlung_cite,
-              g = 'T_pheno',
-              #w facets = c('CD4CD8', 'tissue'),
-              d1 ='CD45RA.protein', d2 =  'CD27.protein',
-              # colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
-              
-              # slot = 'scale.data',
-              noaxis = F, assay = 'CITE',
-              axis.number = T)+
-    geom_hline(yintercept = 0.8, linewidth = 0.2)+
-    geom_vline(xintercept = 2,linewidth = 0.2)
-) %T>% figsave("GDTlung_CD27_CD45RA.pdf", 100, 110) 
 
-
-Feature_rast(GDTlung_cite,
-             g = 'T_pheno',
-              facets = c('patient'),
-             d1 ='CD45RA.protein', d2 =  'CD27.protein',
-             # colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
-             
-             # slot = 'scale.data',
-             noaxis = F, assay = 'CITE',
-             slot = "scale.data",
-             axis.number = T)
 
 
 
 bc_naive <- colnames(   
-  subset(GDTlung_cite,CD27.protein > 0.8 &  CD45RA.protein > 2 )
+  subset(GDTlung_cite,CD27.protein > 0.6 &  CD45RA.protein > 2.5 )
 )
 
 bc_cm <- colnames(   
-  subset(GDTlung_cite, CD27.protein > 0.8 &  CD45RA.protein <= 2 )
+  subset(GDTlung_cite, CD27.protein > 0.6 &  CD45RA.protein <= 2.5 )
 )
 
 bc_em <- colnames(   
-  subset(GDTlung_cite,CD27.protein <= 0.8 &  CD45RA.protein <= 2 )
+  subset(GDTlung_cite,CD27.protein <= 0.6 &  CD45RA.protein <= 2.5 )
 )
 
 bc_tmra <- colnames(   
-  subset(GDTlung_cite,CD27.protein <= 0.8 &  CD45RA.protein > 2 )
+  subset(GDTlung_cite,CD27.protein <= 0.6 &  CD45RA.protein > 2.5 )
 )
 
 
@@ -864,6 +841,19 @@ GDTlung_cite@meta.data  %<>%  mutate(T_pheno= case_when(
 
 
 Feature_rast(GDTlung_cite, c("T_pheno", "ident"))
+
+
+Feature_rast(GDTlung_cite,
+             g = 'T_pheno',
+             facets = c('patient'),
+             d1 ='CD45RA.protein', d2 =  'CD27.protein',
+             colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
+             
+             # slot = 'scale.data',
+             noaxis = F, assay = 'CITE',
+             # slot = "scale.data",
+             axis.number = T)
+
 
 Feature_rast(GDTlung_cite, c("T_pheno"), facets = "tissue")
 
@@ -954,18 +944,26 @@ GDTlung_s$Cell_cluster  %<>% str_replace("_L", "_LN")
 GDTlung_s$Cell_cluster  %<>% str_replace("_P", "_Lu")
 GDTlung_s$Cell_cluster  %<>% str_replace("_Lu", "_LG")
 
-GDTlung_s$Cell_cluster  %<>% str_replace("_LG3", "_L2G4")
+GDTlung_s$Cell_cluster  %<>% str_replace("_LG3", "_LG4")
 
 GDTlung_s$Cell_cluster  %<>% str_replace("_LG4", "_LG3")
 GDTlung_s$Cell_cluster  %<>% str_replace("_L2G4", "_LG4")
+
+GDTlung_s$Cell_cluster  %<>% str_replace("TEM_LN2", "TCM_LN2") %>% 
+  str_replace("TEM_LN3", "TEMRA_LN3")
 
 
 
 Feature_rast(GDTlung_s, "Cell_cluster")
 
+order <- sort(unique(GDTlung_s$Cell_cluster))[c(1,2,7,8,3:6,9:12)]
+order
 
-Idents(GDTlung_s) <- GDTlung_s$Cell_cluster %>% factor(levels = sort(unique(GDTlung_s$Cell_cluster)))
-Feature_rast(GDTlung_s)
+
+ GDTlung_s$Cell_cluster %<>% factor(levels = order)
+Idents(GDTlung_s) <- GDTlung_s$Cell_cluster
+ 
+ Feature_rast(GDTlung_s)
 
 
 saveRDS(GDTlung_s, GDTlung.rds)
@@ -987,8 +985,8 @@ cl_comp_gd <- GDTlung_s@meta.data %>% filter(patient != "p31") %>%
   mutate(percent = n/sum(n)*100) %>% as.data.frame()
 
 
-cl_comp_gd[cl_comp_gd$tissue =='Pulm',]$n <-  -cl_comp_gd[cl_comp_gd$tissue =='Pulm',]$n 
-cl_comp_gd[cl_comp_gd$tissue =='LN',]$percent <-  -cl_comp_gd[cl_comp_gd$tissue =='LN',]$percent
+cl_comp_gd[cl_comp_gd$tissue =='Lung',]$n <-  -cl_comp_gd[cl_comp_gd$tissue =='Lung',]$n 
+cl_comp_gd[cl_comp_gd$tissue =='LLN',]$percent <-  -cl_comp_gd[cl_comp_gd$tissue =='LLN',]$percent
 
 
 
@@ -1364,8 +1362,12 @@ Feature_rast(GDTlung_s, "clonal_expansion", facets = "patient", do.label = F,
 
 Feature_rast(GDTlung_s, c('SELL', 'CD27', 'CD28', 'IL7R', 'TCF7'))
 
+Feature_rast(GDTlung_s, "clonal_expansion",  do.label = F,
+             colorset =  c('#DC143C','#9400D3', '#1E90FF', '#FAFAD2'), navalue = "transparent")
 
 
+
+Feature_rast(GDTlung_s, "cdr3_TRD_perc")
 
 # analysis and make figures -----------------------------------------------
 
@@ -1510,7 +1512,7 @@ GDTTRDfreq
 gini_TRD <-  GDTTRDfreq %>% 
   dplyr::group_by( patient, Cell_cluster) %>%
   summarise(Gini_Index = gini(n), sum = sum(n))  %>%
-  mutate(Gini_Index = replace(Gini_Index, sum < 10, NA))%>% 
+  mutate(Gini_Index = replace(Gini_Index, sum < 20, NA))%>% 
   ungroup() %>% 
   tidyr::complete(patient, Cell_cluster , 
                   fill = list(Gini_Index = NA, sum = NA))
@@ -2730,14 +2732,18 @@ GDTlung_trimmed$Cell_cluster %>% unique()
 GDTlung_trimmed$Cell_cluster <- as.vector(GDTlung_trimmed$Cell_cluster )
 GDTlung_trimmed@meta.data  %<>%  mutate_if(is.factor, as.character) %>%  `rownames<-`(GDTlung_trimmed$bc_backup)
 
-SaveH5Seurat(GDTlung_s, 'GDTlung.h5Suerat')
+GDTlung_s_trim <- GDTlung_s %>% DietSeurat(dimreduces = "umap", assays = "RNA")
+GDTlung_s_trim@assays$RNA$scale.data <-  NULL
+
+
+SaveH5Seurat(GDTlung_s_trim, 'GDTlung_pyscenic/GDTlung.h5Suerat')
 SaveH5Seurat(GDTlung_trimmed, 'GDTlung.trimmed')
 
-Convert('GDTlung.h5Suerat.h5seurat', dest = 'h5ad')
+Convert('GDTlung_pyscenic/GDTlung.h5Suerat.h5seurat', dest = 'h5ad')
 
 
 Convert('GDTlung.trimmed.h5seurat', dest = 'h5ad')
-
+rm(GDTlung_s_trim)
 
 
 # Public data fetal lung --------------------------------------------------
@@ -3381,6 +3387,9 @@ GDTlung_s$Vg9Vd2
 Feature_rast(GDTlung_s, "Vg9Vd2")
 
 
+
+
+colnames(GDTlung_s@meta.data)
 
 Feature_rast(GDTlung_s, "GM_D",
              colorgrd =  c("#eff4ff", "#eff4ff", "purple", "#990000"),
