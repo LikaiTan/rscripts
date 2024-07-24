@@ -18,6 +18,9 @@ library(Nebulosa)
 source('/home/big/tanlikai/script/rscripts/funcs.r')
 setwd('/home/big/tanlikai/Lung/')
 
+figpath_ni <-  "/home/big/googledrive/Lungfigures/"
+
+
 # readdata
 Lung_satija <- readRDS('public/Azimuth.lung.Satija.rds')
 
@@ -44,6 +47,8 @@ Lung_satija@reductions
 # FetchData(Lung_satija, c('CD3D', 'CD4', 'PTPRC'), slot = 'RNA')
 
 Lung_satija <- AddModuleScore(Lung_satija,list(c('CD3D', 'CD3G','CD3E')),assay = 'RNA', name = 'T_cell_score')
+
+
 
 
 
@@ -427,47 +432,44 @@ ClusterCompare(GDTcell, '0', '1',min.pct = 0.1)
 
 
 
-# GESA
+# GSEA  -------------------------------------------------------------------
 
-CP12 <- entrezlist_generator(GDTcell, '0', '1')
+
+
+CP12 <- Genelist_generator(GDTcell_adams, '0', '1')
 
 
 
 library(clusterProfiler)
 library(msigdbr)
-Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
-  dplyr::select(gs_name, entrez_gene)
 
-msigdbr::msigdbr_collections() %>% as.data.frame()
-
-HALLMARK <-  msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
-  dplyr::select(gs_name, entrez_gene)
-
-KEGG  <-   msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG') %>%
-  dplyr::select(gs_name, entrez_gene)
-
-GO<-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>%
-  dplyr::select(gs_name, entrez_gene)
-
-ALL_msigdbr <- rbind(Mc7, HALLMARK,KEGG,GO)
+ALL_msigdb_G  <- rbind(
+  # c7
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
+  # hallmarker
+  msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # C2
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C2",
+                   # GOBP
+                   subcategory = 'CP:KEGG'),msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
+  dplyr::select(gs_name, gene_symbol)
 
 GSEACP12 <- GSEA(geneList = CP12, TERM2GENE=ALL_msigdbr,
                     # minGSSize    = 10,
-                    pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% 
-setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+                    pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+
+GSEACP12@result  <- GSEACP12@result %>% arrange(desc(NES)) 
+
 
 
 GSEA_multipplot(GSEACP12, c("GSE25087_TREG_VS_TCONV_ADULT_UP",
                             'GOBP_CELL_KILLING'
                             ),title = 'Cluster 0 vs 1', c1 = 0, c2 = 1)
-P
-
-view(GSEACP12@result)
 
 
-grep('TREG',GSEACP01@result$Description, value = T )
 
-grep('CD8',GSEACP01@result$Description, value = T )
+GSEACP12@result %>% view()
+
 
 
 gseaplot2(GSEACP01, geneSetID = 'GSE25087_TREG_VS_TCONV_ADULT_UP')
@@ -548,7 +550,7 @@ Feature_rast(GDTcell, 'disease', sz = 2)
 GDTcell_adams <- subset(GDTcell, dataset_origin == 'adams_2020')
 
 
-
+saveRDS(GDTcell_adams, "GDTcell_adams.rds")
 Feature_rast(GDTcell_adams, c('ITGA1', 'ITGAE', 'KLRG1', 'KLF2','ITGB2', 'ZNF683', 'CXCR6', 'CD69', 'GZMA', 'GZMB', 'NKG7', 'PRF1', 'AREG'))
 
 
@@ -594,6 +596,27 @@ ggplot(portions, aes(x = disease, y = per) ) +geom_jitter()+geom_boxplot() + fac
 
 
 
+# gene module -------------------------------------------------------------
+
+
+sigtable <- read.xlsx('abt/abd5778_Table_S3.xlsx',sheet = 1)
+
+colnames(sigtable) %<>%   str_remove('.\\(.+\\)')
+
+sigtable %<>% as.list() %>% map(~ na.exclude(.x) %>% as.vector)
+
+names(sigtable)
+
+for (i in names(sigtable)) {
+  GDTcell_adams <- AddModuleScore(GDTcell_adams, features = list(sigtable[[i]]), name = i, assay = 'RNA')
+  
+}
+colnames(GDTcell_adams@meta.data) %<>% str_replace("(?<=\\w)1$", '')
+
+
+Feature_density(GDTcell_adams,c(names(sigtable)[c(1:9, 14,15)]))
+
+ViolinPlot(GDTcell_adams,c(names(sigtable)[c(1:9, 14,15)]), colors = umap.colors, box = T)
 
 # Figure 6 ----------------------------------------------------------------
 
@@ -611,12 +634,18 @@ GDTcell_adams@meta.data  %<>%  mutate(Disease = case_when(disease == 'chronic ob
 Feature_rast(Lung_satija, c("CD3D", "TRBC1", "TRDC"))
 
 F6A <- Feature_rast(GDTcell_adams, c("ident"),
-             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 1),
-             sz = 1, noaxis = F)
-
+                    othertheme = coord_fixed(),
+                    
+             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 9999),
+             sz = 1, noaxis = F) %T>% print()
+F6A
 F6B <- Feature_rast(GDTcell_adams, c("Disease"),
-             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 12),
+                    othertheme = coord_fixed(),
+                    
+             do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 1),
              sz = 1, noaxis = F) %T>% print() 
+
+
 
 
 F6AB <- PG(list(F6A, F6B), ncol = 1, align = "hv", axis  = "r", labels = "AUTO") %T>% print() 
@@ -626,16 +655,17 @@ F6AB <- PG(list(F6A, F6B), ncol = 1, align = "hv", axis  = "r", labels = "AUTO")
 GDTcell_adams$donor
 
 numberofgdt <-   GDTcell_adams@meta.data %>% group_by(disease,donor) %>% count(seurat_clusters)
+numberofgdt
 
-
-ggplot(numberofgdt , aes(x = seurat_clusters     , y = n , color =  disease )) +
+ggplot(numberofgdt , aes(x = seurat_clusters     , y = n , color =  disease )) + geom_boxplot()
   geom_jitter()+facet_wrap(~disease)
 
 
 F6C <- Feature_rast(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', "KLRG1",  'ITGB2', 'KLF2') ,
                     sz = 1, ncol = 3,
-                    othertheme =theme(
-                      legend.margin = margin(0,0,0,-10, "pt"))) %>% list(NA) %>% PG(ncol = 1, rh = c(1, 0.1))
+                    othertheme =list(theme(
+                      legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())
+                    ) %>% list(NA) %>% PG(ncol = 1, rh = c(1, 0.1))
 F6C
 
 F6D <- GSEA_multipplot(GSEACP12, c("KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY",
@@ -648,12 +678,11 @@ F6D1 <- gseaplot2(GSEACP12, "KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY",bas
 F6D2 <- gseaplot2(GSEACP12, "GOBP_CELL_KILLING",base_size = 8, title = "GOBP_CELL_KILLING")%>% ggplotify::as.ggplot()
 
 
-
-
+Feature_density(GDTcell_adams, c("ZNF683" ,'ITGA1', 'ITGAE', "KLRG1",  'ITGB2', 'KLF2') )
 F6D
 
 F6E <-  GSEA_multipplot(GSEACP12, c("GSE25087_TREG_VS_TCONV_ADULT_UP",
-                                    'GSE7852_TREG_VS_TCONV_FAT_UP'
+                                    'GOBP_REGULATION_OF_EPITHELIAL_TO_MESENCHYMAL_TRANSITION'
 ),title = 'GSEA regulatory', c1 = 0, c2 = 1, base_size = 8
 )
 
@@ -682,10 +711,10 @@ F6 <- (PG(list(F6ABC, F6DE), ncol = 1, rh = c(1, 1))+
          draw_figure_label('Figure 6',  
                            
                            position = 'top.right', size = 10, fontface = 'plain'))%T>% 
-  print() %>% figsave("Fig6_publicdata.2.pdf", 160, 130)
+  print() %T>% figsave("Fig6_publicdata.2024.pdf", 160, 130, path = figpath_ni)
 
 
-Feature_density(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', "ENTPD1",
+Feature_density(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', 
                                 
                                 "KLRG1",  'ITGB2', 'GZMB', "PRF1") ,
              sz = 1, ncol = 4) 
@@ -694,3 +723,54 @@ Feature_rast(GDTcell_adams,c("ZNF683" ,'ITGA1', 'ITGAE', "ENTPD1",
                                 
                                 "KLRG1",  'ITGB2', 'GZMB', "PRF1") ,
                 sz = 1, ncol = 4) 
+
+
+
+
+GSEA_multipplot(GSEACP12, c("GSE25087_TREG_VS_TCONV_ADULT_UP",
+                            'GOBP_CELL_KILLING'
+),title = 'GSEA regulatory', c1 = 0, c2 = 1, base_size = 8
+)
+
+
+
+
+# fig3 for GRF ------------------------------------------------------------
+
+F3Ap <- Feature_rast(GDTcell_adams, c("ident"),
+                     othertheme = coord_fixed(),
+                    do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 9999),
+                    sz = 0.4, noaxis = T) %T>% print()
+F6A
+F3Bp <- Feature_rast(GDTcell_adams, c("Disease"),
+                     othertheme = coord_fixed(),
+                     
+                    do.label = F,mythe = T, colorset = set_sample(umap.colors,s = 9999),
+                    sz = 0.4, noaxis = T) %T>% print() 
+
+F3Cp <- Feature_density(GDTcell_adams, c("ITGA1", "ITGAE"), sz = 0.8) %T>% print()
+
+
+Feature_rast(GDTcell_adams, c("AREG", "CSF1"), sz = 1)
+
+
+F3Dp <- GSEA_multipplot(GSEACP12, c("GSE25087_TREG_VS_TCONV_ADULT_UP",
+                            'GOBP_CELL_KILLING'
+),title = 'GSEA TRM(0) vs TEMRA (1)', c1 = 0, c2 = 1, base_size = 8
+)
+
+
+F3p <-  PG(list(F3Ap, F3Bp), ncol = 2, labels = "AUTO", rw = c(1, 1.2)) %>% 
+  list(F3Cp, F3Dp) %>% 
+  PG(ncol = 1, labels = c(NA,"C","D"), rh = c(1,1,2.3)) %T>% print() %T>%
+  figsave("GRF_Fig_3.pdf", 70, 100 )
+
+
+GDTcell_adams$Disease %>% table()
+
+
+
+ViolinPlot(GDTcell_adams, "AREG", group.by = "Disease", box = T)
+
+
+Feature_rast(GDTcell_adams, "AREG", facets = "Disease")

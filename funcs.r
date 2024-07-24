@@ -93,7 +93,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
                            min.pct = 0.1, genetoshow = 50, ds = 500) {
   DefaultAssay(ob) <- assay
     if (!is.null(group.by)) {
-      Idents(ob) <- ob[[group.by]]
+      Idents(ob) <- group.by
     }
   result <- c()
   result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
@@ -156,8 +156,10 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
-                         dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), facetcol = NULL,
-                         mythe =T, titleface = 'italic',colorset = c('um','gg'), 
+                         dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), 
+                         facetcol = NULL,
+                         mythe =T,
+                         titleface = 'italic',colorset = c('um','gg'), 
                
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
@@ -168,7 +170,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
   if (class(data) == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
-                            facets , g,other), slot = slot)
+                            facets , g,other), layer = slot)
   } else {
     fd <- data
   }
@@ -310,9 +312,24 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
                             adjust = 1,shape = 16, nrow = NULL,  othertheme = NULL,
                             mythe =T, titleface = 'italic',titlesize =8,
                            noaxis = T, axis.number = F,
-                           colorgrd =  c("#eff4ff", "#ffcc66", "red", "#990000"),navalue= "transparent",
+                           colorgrd =  "grd1",navalue= "transparent",
                            
                             labels = NULL,  assay = DefaultAssay(data),slot = NULL ) {
+  
+  # gradient color define 
+  color_list1 <- c( alpha(c("#D4EDF7", "#347B99"), 0.5), "#4424D6", "#110934")  # Example colors
+  color_list2 <- c(alpha(c("#F0F7D4", "#B2D732"),0.5), "#347B11", "#092834")  # Example colors
+  # Determine the color gradient to use
+  if (length(colorgrd) == 1 && colorgrd == 'grd1') {
+    colors <- color_list1
+  } else if ( length(colorgrd) == 1 && colorgrd == 'grd2') {
+    colors <- color_list2
+  } else if (length(colorgrd) > 1 && is.vector(colorgrd) ) {
+    colors <- colorgrd
+  } else {
+    stop("Invalid colorgrd value. Use 1, 2, or a vector of color hex codes.")
+  }
+  
   
   DefaultAssay(data) <- assay
   if (length(feature) ==1 ) {
@@ -323,7 +340,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
         mytheme
       })+     
    scale_colour_gradientn(
-     colors = colorgrd,
+     colors = colors,
      space = "Lab",
      na.value = navalue,
      guide = "colourbar",
@@ -346,7 +363,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
                  mytheme
                })+ 
                scale_colour_gradientn(
-                 colors = colorgrd,
+                 colors = colors,
                  space = "Lab",
                  na.value = navalue,
                  guide = "colourbar",
@@ -463,7 +480,9 @@ set_sample <- function(x,  n = NULL, s = 629)  {
 GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
                             rel_h = c(1, 0.1, 0.4),
                             legend.position = 'bottom', c1,c2,
-                            base_size = 8, title = paste('GSEA',c1,'vs',c2), col = "green") {
+                            base_size = 8, title = paste('GSEA',c1,'vs',c2), 
+                            plots = c(1,2,3),
+                            col = "green") {
   require(enrichplot)
   GSEAall_1 <- gseaplot2(x, color = col,
                          geneSetID = description_to_show,
@@ -495,13 +514,14 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
           axis.title = element_text(size = 8))+
     scale_x_continuous(breaks = c(1, length(x@geneList)), expand = c(0, 0),
                        labels=c(paste(c1,'high'),paste(c2,'high')))
-
+  
+    GSEA_all_list <-  list(GSEAall_1, GSEAall_2, GSEAall_3)
   GESA_legend <-
     cowplot::get_legend(gseaplot2(x, color = col,
                                   geneSetID = description_to_show,base_size = base_size,
                                   pvalue_table = legendpvalue, subplots = 1)+
                           theme(legend.position = 'right', legend.text  = element_text(size = 8)))
-  GSEA_all <- plot_grid(plotlist = list(GSEAall_1, GSEAall_2, GSEAall_3), ncol = 1, scale = 1,
+  GSEA_all <- plot_grid(plotlist = GSEA_all_list[plots], ncol = 1, scale = 1,
                         align = "v", axis = 'y', rel_heights = rel_h)
   if (legend.position == 'bottom'){
     GSEA_all <- plot_grid(plotlist = list(GSEA_all, GESA_legend), ncol =1,
@@ -532,6 +552,19 @@ entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db'),rm = "^M
 }
 
 
+Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP") {
+  logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2,
+                           test.use = 'bimod',logfc.threshold = 0, 
+                           only.pos = F,  min.pct = 0.1) %>%
+    tibble::rownames_to_column('SYMBOL') %>% dplyr::arrange(desc(avg_log2FC)) %>%
+    dplyr:: filter(!grepl(rm, SYMBOL) )
+  genelist <- logfclist$avg_log2FC
+  names(genelist) <- as.character(logfclist$SYMBOL)
+  return(sort(genelist, decreasing = T))
+}
+
+
+
 figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
                      path = 'figs',
                     scale = 1, units = 'mm', dpi = 300
@@ -548,7 +581,8 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                         facet = NULL,
                        ncol = min(3, length(g)), split = NULL, 
                        colors = ggplotColours(cln), othertheme = NULL,
-                       idents = NULL,alpha_point =0.8, alpha_fill = 0.4, jitter = T, box = F,
+                       idents = NULL,alpha_point =0.8, alpha_fill = 0.4, 
+                       jitter = T, box = F,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 8,
                        assay = DefaultAssay(data),slot = 'data',
                        labels = NULL, labelsize =8, labelface='plain',

@@ -1128,107 +1128,6 @@ ggplot(GMS_long %>% filter(variable %in% c("Effectors", "Tissue.resident", "Exha
 
 
 saveRDS(CD4CD8, CD4CD8RDS)
-# GSEA --------------------------------------------------------------------
-
-library(clusterProfiler)
-library(org.Hs.eg.db)
-DefaultAssay(CD4CD8) <- 'RNA'
-ent2_10 <- entrezlist_generator(CD4CD8, '2','10')
-
-ent2_10 <- entrezlist_generator(CD4CD8, '2','10')
-
-ent3_10 <- entrezlist_generator(CD4CD8, '3','10')
-
-
-saveRDS(ent2_10, 'ent2_10.rds')
-
-
-library(msigdbr)
-
-msigdbr_collections() %>%  as.data.frame()
-
-
-Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
-  dplyr::select(gs_name, entrez_gene)
-
-Hallmarks <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
-  dplyr::select(gs_name, entrez_gene)
-
-GO_BP <- msigdbr::msigdbr(species = "Homo sapiens", category = "C5", subcategory = 'BP') %>%
-  dplyr::select(gs_name, entrez_gene)
-
-Mc2 <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C2") %>%
-  dplyr::select(gs_name, entrez_gene)
-
-
-
-
-Msig_refs <- list(Mc7, Mc2, Hallmarks, GO_BP) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-Msig_refs$GOBP
-
-
-C2_C10_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
-       ge <-   GSEA(geneList = ent2_10, TERM2GENE=x,  
-       pvalueCutoff = 0.05) %>%
-         setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
-       ge@result %>% arrange(desc(NES))  %>%
-         write.xlsx(paste0('CD4CD8c2_to_c10_Msigdb_',y,'_.xlsx') )
-       print(nrow(ge@result))
-     return(ge)
-  }) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-
-C2_C10_msigdb <- readRDS('CD4CD8_c2_vs_c10_GSEA.rds')
-
-C3_C10_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
-  ge <-   GSEA(geneList = ent3_10, TERM2GENE=x,  
-               pvalueCutoff = 0.05) %>%
-    setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
-  ge@result %>% arrange(desc(NES))  %>%
-    write.xlsx(paste0('CD4CD8c3_to_c10_Msigdb_',y,'_.xlsx') )
-  print(nrow(ge@result))
-  return(ge)
-}) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-
-
-
-map(c(Mc7, Mc2, Hallmarks, GO_BP), ~ get_obj_name() )
-
-
-
-c2_c10_Msigdb_GSEA@result  <- c2_c10_Msigdb_GSEA@result %>% arrange(desc(NES)) 
-write.xlsx(c2_c10_Msigdb_GSEA@result , 'CD4CD8c2_to_c10_Msigdb_c7.xlsx')
-
-
-view(c2_c7_Msigdb_GSEA@result)
-Feature_rast(CD4CD8)
-ClusterCompare(CD4CD8, '3', '6')
-ClusterCompare(CD4CD8, '3', '10')
-
-
-ClusterCompare(CD4CD8, 'C13', 'C17')
-
-
-Feature_rast(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
-Feature_density(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
-
-
-Feature_rast(CD4CD8, grep('^^KIR2|KIR3', rownames(CD4CD8), value = T))
-ViolinPlot(CD4CD8, grep('^KIR2|KIR3', rownames(CD4CD8), value = T), colors = umap.colors)
-
-DEG_CD8Trm_CD8Tcirc<- ClusterCompare(CD4CD8, '10', '3')
-DEG_CD8Trm_CD8Tcirc$table
-
-DEG_CD8Trm_CD8Tcirc_TF<- ClusterCompare(CD4CD8, '10', '3', features = TFs)
-DEG_CD8Trm_CD8Tcirc_TF$plot
-
-
-Feature_density(CD4CD8, c('NCAM1', 'NCR1','CD3E', 'KIR2DL3', 'KIR2DL4'))
-
-Feature_rast(CD4CD8, c('NCAM1', 'NCR1', 'CD7', 'KIR2DL3', 'KIR2DL4'), sz = 0.2, color_grd = 'threecolor', mid.point = 0.7)
-
-Feature_rast(CD4CD8, c(
-  'ident', 'tissue'
-), sz = 0.2)
 # tissue residency --------------------------------------------------------
 
 ViolinPlot(CD4CD8, c('CD49a.protein', 'CD103.protein', 'CD4.protein', 'CD45RA.protein'), assay = 'CITE', group.by = 'patient'  ,colors = umap.colors, box = T)
@@ -1832,46 +1731,162 @@ view(DEGreg)
 
 ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "AUC", log2fc = 0.01)
 
-
 # GSEA --------------------------------------------------------------------
 
 library(clusterProfiler)
 library(org.Hs.eg.db)
 
-future::plan(strategy = "sequential")
+library(msigdbr)
+
+msigdbr_collections() %>%  as.data.frame()
+
+
+Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+Hallmarks <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+GO_BP <- msigdbr::msigdbr(species = "Homo sapiens", category = "C5", subcategory = 'BP') %>%
+  dplyr::select(gs_name, entrez_gene)
+
+Mc2 <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C2") %>%
+  dplyr::select(gs_name, entrez_gene)
+
+
+
+
+Msig_refs <- list(Mc7, Mc2, Hallmarks, GO_BP) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
+Msig_refs$GOBP
+
+
+TEMRA_TRM_3 <- entrezlist_generator(CD4CD8, id1 = "Temra_1_LG", id2 = "TRM_3_LG")
+
+TEMRA_TRM_3_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
+  ge <-   GSEA(geneList = TEMRA_TRM_3, TERM2GENE=x,  
+               pvalueCutoff = 0.05) %>%
+    setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
+  ge@result %>% arrange(desc(NES))  %>%
+    write.xlsx(paste0('CD4CD8_TEMRA_TRM_3_Msigdb_',y,'_.xlsx') )
+  print(nrow(ge@result))
+  return(ge)
+}) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
+
+
+
+C2_C10_msigdb <- readRDS('CD4CD8_c2_vs_c10_GSEA.rds')
+
+C3_C10_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
+  ge <-   GSEA(geneList = ent3_10, TERM2GENE=x,  
+               pvalueCutoff = 0.05) %>%
+    setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
+  ge@result %>% arrange(desc(NES))  %>%
+    write.xlsx(paste0('CD4CD8c3_to_c10_Msigdb_',y,'_.xlsx') )
+  print(nrow(ge@result))
+  return(ge)
+}) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
+
+
+
+map(c(Mc7, Mc2, Hallmarks, GO_BP), ~ get_obj_name() )
+
+
+
+c2_c10_Msigdb_GSEA@result  <- c2_c10_Msigdb_GSEA@result %>% arrange(desc(NES)) 
+write.xlsx(c2_c10_Msigdb_GSEA@result , 'CD4CD8c2_to_c10_Msigdb_c7.xlsx')
+
+
+view(c2_c7_Msigdb_GSEA@result)
+Feature_rast(CD4CD8)
+ClusterCompare(CD4CD8, '3', '6')
+ClusterCompare(CD4CD8, '3', '10')
+
+
+ClusterCompare(CD4CD8, 'C13', 'C17')
+
+
+Feature_rast(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
+Feature_density(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
+
+
+Feature_rast(CD4CD8, grep('^^KIR2|KIR3', rownames(CD4CD8), value = T))
+ViolinPlot(CD4CD8, grep('^KIR2|KIR3', rownames(CD4CD8), value = T), colors = umap.colors)
+
+DEG_CD8Trm_CD8Tcirc<- ClusterCompare(CD4CD8, '10', '3')
+DEG_CD8Trm_CD8Tcirc$table
+
+DEG_CD8Trm_CD8Tcirc_TF<- ClusterCompare(CD4CD8, '10', '3', features = TFs)
+DEG_CD8Trm_CD8Tcirc_TF$plot
+
+
+Feature_density(CD4CD8, c('NCAM1', 'NCR1','CD3E', 'KIR2DL3', 'KIR2DL4'))
+
+Feature_rast(CD4CD8, c('NCAM1', 'NCR1', 'CD7', 'KIR2DL3', 'KIR2DL4'), sz = 0.2, color_grd = 'threecolor', mid.point = 0.7)
+
+Feature_rast(CD4CD8, c(
+  'ident', 'tissue'
+), sz = 0.2)
+
+# # GSEA genesymobl instead --------------------------------------------------------------------
+
+library(clusterProfiler)
+library(org.Hs.eg.db)
+
 
 
 library(msigdbr)
-Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
-  dplyr::select(gs_name, entrez_gene)
-HALLMARK <-  msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
-  dplyr::select(gs_name, entrez_gene)
 
-KEGG  <-   msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG') %>%
-  dplyr::select(gs_name, entrez_gene)
+Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") 
 
-GO<-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>%
-  dplyr::select(gs_name, entrez_gene)
+Hallmarks <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") 
+
+GO_BP <- msigdbr::msigdbr(species = "Homo sapiens", category = "C5", subcategory = 'BP')
+
+Mc2 <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C2") 
 
 
-ALL_msigdbr <- rbind(Mc7, HALLMARK,KEGG,GO)
 
 
-TRM1_3 <- entrezlist_generator(CD4CD8, 'TRM_1_P','TRM_3_P')
+
+ALL_msigdb_G  <- rbind(
+  # c7
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
+  # hallmarker
+                       msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # C2
+                       msigdbr::msigdbr(species = "Homo sapiens", category = "C2",
+                                        # GOBP
+                                        subcategory = 'CP:KEGG'),msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
+  dplyr::select(gs_name, gene_symbol)
+
+
+TEMRA_TRM_3_G <- Genelist_generator(CD4CD8, id1 = "Temra_1_LG", id2 = "TRM_3_LG")
+
+
+
+
+
+
+TEMRA_TRM_3_msigdb_G <- GSEA(geneList = TEMRA_TRM_3_G, TERM2GENE=ALL_msigdb_G, verbose = T,
+                           pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+TEMRA_TRM_3_msigdb_G@result  <- TEMRA_TRM_3_msigdb_G@result %>% arrange(desc(NES)) 
+
+view(TEMRA_TRM_3_msigdb_G@result )
+
+
+TRM1_3 <- Genelist_generator(CD4CD8, 'TRM_1_LG','TRM_3_LG')
 TRM1_3_Msigdb_GSEAc7 <- GSEA(geneList = TRM1_3, TERM2GENE=Mc7, verbose = T,
-                          # minGSSize    = 15,
-                          pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
+                             # minGSSize    = 15,
+                             pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
 TRM1_3_Msigdb_GSEAc7@result  <- TRM1_3_Msigdb_GSEAc7@result %>% arrange(desc(NES)) 
 view(TRM1_3_Msigdb_GSEAc7@result)
 
-TRM1_3_Msigdb_GSEA <- GSEA(geneList = TRM1_3, TERM2GENE=ALL_msigdbr,  
-                             minGSSize    = 15,
-                             pvalueCutoff = 0.05, pAdjustMethod = "BH") %>% setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID")
-TRM1_3_Msigdb_GSEA@result  <- TRM1_3_Msigdb_GSEA@result %>% arrange(desc(NES)) 
-view(TRM1_3_Msigdb_GSEA@result )
 
+TRM1_3_Msigdb_all_GSEA_G <- GSEA(geneList = TRM1_3, TERM2GENE=ALL_msigdb_G,  
+                               pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+TRM1_3_Msigdb_all_GSEA_G@result  <- TRM1_3_Msigdb_all_GSEA_G@result %>% arrange(desc(NES)) 
 
-
+view(TRM1_3_Msigdb_all_GSEA_G@result)
 
 
 
@@ -3597,7 +3612,7 @@ FS1A <-
   (Feature_rast(CD4CD8_cite,
                 g = "T_pheno", sz = 0.3,
                 facets = c('tissue'),  do.label = F,
-                othertheme = (theme_minimal()),
+                othertheme = list(theme_minimal()),
                 d1 ='CD45RA.protein', d2 =  'CD27.protein',
                 colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
                 
@@ -3646,6 +3661,7 @@ figpath_ni
 
 F2A <- (Feature_rast(CD4CD8, sz = 0.3,
                      g= "CD4CD8", do.label = F,
+                     othertheme = coord_fixed(),
                      noaxis = F
                      
 )+ggtitle('CD4+ and CD8+ T cell distribution')+
@@ -3695,10 +3711,10 @@ F2B <- (ggplot(GMS_long %>% filter(variable %in% c( "Tissue.resident", "Tregs","
   fill_m()+
     theme_minimal()+
     mytheme+
-    guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
-      
-    )+
-    
+    # guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
+    #   
+    # )+
+    NoLegend()+
   theme(axis.text.x = element_text(size = 8 , angle = 90))
   
   ) %T>% print() 
@@ -3711,18 +3727,18 @@ F2C1 <- Feature_rast(CD4CD8_cite,
                     c( "CD196.protein", "CD26.protein", 
                        "CD94.protein"), 
                     colorgrd  = "grd2",
-                    othertheme =   (theme(
-                      legend.margin = margin(0,0,0,-10, "pt")
-                      
-                    )),      sz = 0.4, ncol = 1) %T>%  print()
+                    othertheme =   list(theme(
+                      legend.margin = margin(0,0,0,-10, "pt")),
+                      coord_fixed()  
+                    ),      sz = 0.2, ncol = 1) %T>%  print()
 F2C2 <- Feature_rast(CD4CD8_cite, 
                     "KLRG1.protein" ,
                     slot = "scale.data",
                      colorgrd  = "grd2",
-                     othertheme =   (theme(
-                       legend.margin = margin(0,0,0,-10, "pt")
-                       
-                     )),      sz = 0.4, ncol = 1) %T>%  print()
+                    othertheme =   list(theme(
+                      legend.margin = margin(0,0,0,-10, "pt")),
+                      coord_fixed()  
+                      ),      sz = 0.2, ncol = 1) %T>%  print()
 F2C <- PG(list(F2C1,F2C2), ncol = 1, rh =c(3,1))%T>%  print()
 
   
@@ -3734,11 +3750,12 @@ F2ABC <- PG(list(F2A, F2B, F2C), rw = c(1.4,2.5,0.5), ncol = 3, labels = "AUTO")
 
 # F2D TFs   
 
-F2D <-  Feature_rast(CD4CD8, c("TBX21", "EOMES", "GATA3", "BATF", "ZNF683", "RORC"), sz = 0.1, ncol = 7,
-                     othertheme =   (theme(
-                       legend.margin = margin(0,0,0,-10, "pt")
+F2D <-  Feature_rast(CD4CD8, c("TBX21", "EOMES", "GATA3", "BATF", "ZNF683", "RORC"), sz = 0.1, ncol = 6,
+                     othertheme =   list(theme(
+                       legend.margin = margin(0,0,0,-10, "pt")),
+                       coord_fixed()
                        
-                     )))
+                     ))  %T>% print()
 
 
 ClusterCompare(CD4CD8, "Temra_1_LG", "TRM_3_LG")
@@ -3843,11 +3860,16 @@ trmcl2 <- c(
   # "Temra_2_P"
   
 )
-genef21 <- c("GZMA",   "GZMK",  "IFNG", "TNF") 
-genef22  <-  c( "CD40LG", "IL17A", "XCL1", "XCL2")
+ genef21 <- c("GZMA",   "GZMK",  "IFNG", "TNF") 
+genef22  <-  c( "CD40LG", "IL17A", "XCL1", "CSF1")
 
 F2F1 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ) %T>% print()
-F2F2 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef22, colors = umap.colors, box = F, ncol =4, x.angle = 70
+
+
+ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ,sz =  0.2) %T>% print()
+
+F2F2 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef22, colors = umap.colors, 
+                   box = F, ncol =4, sz = 0.2, othertheme = theme(axis.text.x = element_text(angle = 70, vjust = 0))
                    )  %T>% print()
 F2F <- PG(list(F2F1, F2F2), ncol = 1, rh = c(1,1.3))
 F2F

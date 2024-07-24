@@ -33,6 +33,9 @@ source('/home/big/tanlikai/script/rscripts//funcs.r')
 
 # readprocessed dataframe -------------------------------------------------
 
+
+
+
 TotalT_corrected <- readRDS('totalTcell_processed_dataframe.rds')
 
 
