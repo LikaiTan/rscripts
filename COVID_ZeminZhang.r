@@ -249,4 +249,35 @@ ClusterCompare(COPD_gdTcells, id1 = "Healthy", id2 =  "Donor", group.by = "disea
 Idents(COVID_GDT) <-  "CoVID.19.severity"
 
 Feature_rast(COVID_GDT)
-Ident
+
+
+# GSEA
+
+genelist_c0_c1 <- Genelist_generator(subset(COVID_GDT, Sample.type == "fresh BALF"), "mild/moderate", "severe/critical")
+
+genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
+
+ibrary(clusterProfiler)
+library(msigdbr)
+
+ALL_msigdb_G  <- rbind(
+  # c7
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
+  # hallmarker
+  msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # C2
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG'),
+  # GOBP
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
+  dplyr::select(gs_name, gene_symbol)
+
+
+GOBP <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>% 
+  dplyr::select(gs_name, gene_symbol)
+
+GSEA_c0_c1 <- GSEA(geneList = genelist_c0_c1, TERM2GENE=ALL_msigdb_G,
+                   # minGSSize    = 10,
+                   pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+
+
+

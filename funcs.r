@@ -159,15 +159,15 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), 
                          facetcol = NULL,
                          mythe =T,
-                         titleface = 'italic',colorset = c('um','gg'), 
+                         titleface = 'italic',colorset = c('um','gg'),    colorgrd = "grd1",
                
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
-                         colorgrd = "grd1",
+                      
                          navalue ="transparent" ) {
 
-  if (class(data) == 'Seurat') {
+  if (class(data)[1] == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
                             facets , g,other), layer = slot)
@@ -393,12 +393,15 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
 
 
 
-#'ggplot color scheme
+#'ggplot color scheme generate ggplot colors, random or not
 #'ggplotColours()
-ggplotColours <- function(n = 6, h = c(0, 360) + 15){
+ggplotColours <- function(n = 6, h = c(0, 360) + 15, r = F, seed = 1){
   if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
-  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
-}
+ cl <-  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
+ if (isTRUE(r)) {
+cl <- set_sample(cl, s = seed) }
+ return(cl)
+ }
 
 
 #'a function to unify the size of geom_text and element_text
@@ -731,7 +734,6 @@ multicores <- function(core=20, mem = 100, strategy = 'multicore') {
 #   
 # }
 # ) %>% set_names(id) %>% as.data.frame()
-
 
 
 
