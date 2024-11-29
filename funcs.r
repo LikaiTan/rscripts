@@ -156,6 +156,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
+Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), 
                          facetcol = NULL,
                          mythe =T,
@@ -217,7 +218,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
       (if (isTRUE(is.numeric(fd[[g]]))){ 
         scale_colour_gradientn(
           colors = colors,
-          space = "Lab",
+          space = "Lab", 
           na.value = navalue,
           guide = "colourbar",
           aesthetics = "colour" )
@@ -707,7 +708,42 @@ color_m <- function(color = umap.colors, al =1,
 fill_m <- function(color = umap.colors, al =1, na = alpha('lightgrey',0.5),labels = waiver()) {
   scale_fill_manual(values = alpha(color, al), na.value = na,labels = labels)
 }
-?scale_fill_manual
+
+
+scale_m <- function( colorgrd = "grd1", 
+                     
+                     breaks=NULL,
+                     limits=NULL,
+                     na = "transparent"
+  
+) {
+  
+  # gradient color define 
+  color_list1 <- c( alpha(c("#D4EDF7", "#347B99"), 0.5), "#4424D6", "#110934")  # Example colors
+  color_list2 <- c(alpha(c("#F0F7D4", "#B2D732"),0.5), "#347B11", "#092834")  # Example colors
+  
+  # Determine the color gradient to use
+  if (length(colorgrd) == 1 && colorgrd == 'grd1') {
+    colors <- color_list1
+  } else if ( length(colorgrd) == 1 && colorgrd == 'grd2') {
+    colors <- color_list2
+  } else if (length(colorgrd) > 1 && is.vector(colorgrd) ) {
+    colors <- colorgrd
+  } else {
+    stop("Invalid colorgrd value. Use 1, 2, or a vector of color hex codes.")
+  }  
+  scale_colour_gradientn(
+    colors = colors,
+    space = "Lab", 
+    na.value = na,
+    guide = "colourbar",
+    breaks = breaks,
+    limits = limits,
+    aesthetics = "colour" )
+  
+}
+
+
 
 
 # options(future.fork.enable = TRUE)
