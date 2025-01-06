@@ -218,7 +218,8 @@ COVID_GDT$CoVID.19.severity
 
 table(COVID_GDT$Sample.type, COVID_GDT$datasets)
 
-COVID_GDT@meta.data %>% filter(datasets== "d07") %>%  count(PatientID, Sample.type)
+COVID_GDT@meta.data %>% filter(datasets== "d07") %>% 
+  count(PatientID, Sample.type)
 COVID_GDT$CoVID.19.severity %>% unique()
 
 ViolinPlot(COVID_GDT %>%  subset(Sample.type == "fresh BALF"), g = c("AREG", "IFNG", "ITGAE", "GATA3","GZMA",
@@ -237,10 +238,33 @@ subset(COVID_GDT, Sample.type == "fresh BALF")$PatientID %>% table()
 COVID_M_S_heat <-  ClusterCompare(subset(COVID_GDT, Sample.type == "fresh BALF"),id1 = "mild/moderate",
                id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
 
+COVID_M_S_heat$plot
+
+view(COVID_M_S_heat$table)
+
 ClusterCompare(subset(COVID_GDT, Sample.type == "fresh BALF"),id1 = "mild/moderate",
                id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
 
 
+table(COVID_GDT$Sample.type, COVID_GDT$datasets)
+
+
+ClusterCompare(subset(COVID_GDT, datasets == "d07"),id1 = "mild/moderate",
+               id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
+
+d07_pbmc <-  
+ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh PBMC"),id1 = "mild/moderate", log2fc = 0,
+               id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
+
+d07_pbmc$table
+d07_balf <-  
+  ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh BALF"),id1 = "mild/moderate", log2fc = 0,
+                 id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
+
+
+d07_balf
+
+d07_balf$table
 ClusterCompare(COVID_GDT,id1 = "mild/moderate",
                id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp",genetoshow = 5)
 COPD_gdTcells$disease
@@ -253,9 +277,10 @@ Feature_rast(COVID_GDT)
 
 # GSEA
 
-genelist_c0_c1 <- Genelist_generator(subset(COVID_GDT, Sample.type == "fresh BALF"), "mild/moderate", "severe/critical")
+genelist_COVID_M_S <- Genelist_generator(subset(COVID_GDT, Sample.type == "fresh BALF"),
+                                     "mild/moderate", "severe/critical", group.by = "CoVID.19.severity")
 
-genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
+# genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
 
 ibrary(clusterProfiler)
 library(msigdbr)
@@ -272,12 +297,18 @@ ALL_msigdb_G  <- rbind(
   dplyr::select(gs_name, gene_symbol)
 
 
-GOBP <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>% 
-  dplyr::select(gs_name, gene_symbol)
 
-GSEA_c0_c1 <- GSEA(geneList = genelist_c0_c1, TERM2GENE=ALL_msigdb_G,
+GSEA_COVID_M_S <- GSEA(geneList = genelist_COVID_M_S, TERM2GENE=ALL_msigdb_G,
                    # minGSSize    = 10,
                    pvalueCutoff = 0.05, pAdjustMethod = "BH") 
 
+view(GSEA_COVID_M_S@result)
 
+
+
+GSEA_multipplot(GSEA_COVID_M_S, description_to_show = 
+c("GOBP_GRANULOCYTE_CHEMOTAXIS", "HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION"), c1 = "COVID_moderate", c2 = "COVID_severe")
+
+
+Feature_rast(subset(COVID_GDT, datasets == "d07" ), c("Sample.type", "CoVID.19.severity", "TRDV1", "TRDV2"))
 

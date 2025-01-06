@@ -23,6 +23,7 @@ library(magrittr)
 library(Nebulosa)
 
 source('/home/big/tanlikai/script/rscripts/funcs.r')
+file.edit('/home/big/tanlikai/script/rscripts/funcs.r')
 
 
 setwd("/home/big/tanlikai/Lung/")
@@ -152,6 +153,8 @@ Feature_rast(COPD_Tcells, d1 = "TRAB_score1", d2 = "TRD_score1",
 
 
 table(COPD_Tcells$gdTcells, COPD_Tcells$Level_4)
+
+
 
 
 COPD_gdTcells <- subset(COPD_Tcells,   gdTcells == TRUE)
@@ -332,9 +335,118 @@ table(COPD_gdTcells$gd_cluster, COPD_gdTcells$disease) %>%  prop.table(margin = 
 
 
 
+Feature_rast(COPD_Tcells, "Level_4", colorset = "gg")
+Feature_rast(COPD_gdTcells, "Level_4", colorset = "gg")
 
 
 
+# abundance ---------------------------------------------------------------
+
+
+
+copdratio <-  (table(COPD_gdTcells$disease, COPD_gdTcells$gd_cluster) %>%  
+                 prop.table(margin = 1)*100) %>% data.frame() %>% filter(!is.na(Freq)) %>% 
+  `colnames<-`(c("disease", "gd_cluster","Percent"))
+
+
+
+copdratio_donor <-  COPD_gdTcells@meta.data %>%  
+  group_by(orig.ident, disease) %>% count(gd_cluster) %>%  mutate(percent = n/sum(n)*100, SUM = sum(n))
+
+copdratio_donor$SUM %>%  unique()
+
+
+
+
+
+ggplot(copdratio_donor %>%  filter(SUM > 20), aes(x = disease, y = percent)) + geom_point()+facet_wrap(~gd_cluster )+ theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+
+
+copdratio_donor_T <-  COPD_Tcells@meta.data %>%  
+  group_by(orig.ident, disease) %>% count(Level_4) %>%  mutate(percent = n/sum(n)*100, SUM = sum(n))
+
+
+
+
+
+
+ggplot(copdratio_donor_T %>%  filter(SUM > 50), aes(x = disease, y = percent)) + geom_point()+facet_wrap(~Level_4 )+ theme(axis.text.x = element_text(angle = 90))
+
+
+
+
+library(miloR)
+library(SingleCellExperiment)
+library(scater)
+library(scran)
+library(dplyr)
+library(patchwork)
+
+COPD_gdTcells@meta.data$disease %>% unique
+COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema",
+                                                                             "GOLD I/II",
+                                                                             "Smoking-related ILD") ~ "COPD",  disease %in% c("Healthy", "Donor") ~ "Control" ))
+
+Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl")
+
+
+
+
+copdratio_donor <-  COPD_gdTcells@meta.data %>%  filter(!is.na(COPD_vs_Ctrl)) %>% 
+  group_by(orig.ident, COPD_vs_Ctrl) %>% dplyr::count(gd_cluster) %>%  mutate(percent = n/sum(n)*100, SUM = sum(n))
+
+copdratio_donor$SUM %>%  unique()
+
+ggplot(copdratio_donor %>%  filter(SUM > 20), aes(x = COPD_vs_Ctrl, y = percent)) + geom_point()+facet_wrap(~gd_cluster )+ theme(axis.text.x = element_text(angle = 90))
+
+
+COPD_gdTcells_ab <- subset(COPD_gdTcells, COPD_vs_Ctrl %in% c('COPD', "Control") )
+
+Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", colorset =c( "cyan", "blue"))
+
+COPD_gdTcells_ab <- as.SingleCellExperiment(COPD_gdTcells_ab)
+COPD_gdTcells_ab_milo <- Milo(COPD_gdTcells_ab)
+
+data.frame(colData(COPD_gdTcells_ab_milo))
+
+
+COPD_gdTcells_ab_milo  %<>% buildGraph(k = 10, d = 30) %>% 
+  makeNhoods( prop = 0.1, k = 10, d=30, refined = TRUE) %>% 
+  countCells(meta.data = data.frame(colData(COPD_gdTcells_ab_milo)), samples="orig.ident")
+
+
+COPD_design <- data.frame(colData(COPD_gdTcells_ab_milo))[,c("orig.ident", "COPD_vs_Ctrl")] %>% 
+  distinct() 
+
+COPD_design
+rownames(COPD_design) <- COPD_design$orig.ident
+## Reorder rownames to match columns of nhoodCounts(milo)
+COPD_design <- COPD_design[colnames(nhoodCounts(COPD_design)), , drop=FALSE]
+
+COPD_design
+
+COPD_gdTcells_ab_milo <- calcNhoodDistance(COPD_gdTcells_ab_milo, d=30)
+
+da_results <- testNhoods(COPD_gdTcells_ab_milo, design = ~ COPD_vs_Ctrl, design.df = COPD_design)
+da_results
+ggplot(da_results, aes(PValue)) + geom_histogram(bins=50)
+
+ggplot(da_results, aes(logFC, -log10(SpatialFDR))) + 
+  geom_point() +
+  geom_hline(yintercept = 1)
+
+
+da_results <- annotateNhoods(COPD_gdTcells_ab_milo, da_results, coldata_col = "gd_cluster")
+head(da_results)
+da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.5, "Mixed", da_results$gd_cluster)
+plotDAbeeswarm(da_results, group.by = "gd_cluster", alpha = 0.15)
+
+
+ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
 
 # gene module -------------------------------------------------------------
 
@@ -400,6 +512,9 @@ ViolinPlot(COPD_gdTcells, c("GM_C", "GM_D", "GM_F", "GM_G", "GM_H"),
 
  AllDEGs_COPDpub <-  FindAllMarkers(COPD_gdTcells,logfc.threshold = 0.25,only.pos = T,min.pct = 0.1) 
  AllDEGs_COPDpub  %<>% mutate(pct.diff = pct.1 - pct.2)
+ 
+ 
+AllDEGs_COPDpub %>%  filter(gene %in% c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7", "EOMES", "TNFRSF18", "CSF1", "GATA3", "AREG" ))
 
  scgenes <-  unique(COPD_gdTcells@assays$RNA@var.features, unique(AllDEGs_COPDpub$gene))
  
@@ -462,11 +577,12 @@ DotPlot(COPD_gdTcells,assay = 'RNA',dot.scale = 3.5,
     size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom'))
 
 
+TFs <- readLines('HumanTFs_1639.txt') %>% as.vector()
+TFs_gd <- intersect(TFs, rownames(COPD_gdTcells))
  
  
  
- 
- 
+ClusterCompare(COPD_gdTcells, 'gdTRM_1', 'gdTemra_1', features = TFs_gd)
 # GSEA --------------------------------------------------------------------
 
 
@@ -679,13 +795,13 @@ mytheme+
                         label.position = 'right'))+
      NULL)%T>% print()
 
-F6F <- Feature_rast(COPD_gdTcells, c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7", "TBX21", "AREG", "CSF1", "GATA3" ), ncol = 3, sz = 0.4,
+F6F <- Feature_rast(COPD_gdTcells, c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7", "EOMES", "TNFRSF18", "CSF1", "GATA3" ), ncol = 3, sz = 0.4,
                     othertheme = list(coord_fixed(),theme(
                       plot.margin = margin(0,0,-2,-3, "pt"),
                       legend.margin = margin(0,0,0,-10, "pt"))  )  ) %T>% print()
 
 
-
+Feature_rast(COPD_gdTcells, c("IRF2", "IRF4", "BATF"))
 
 
 
@@ -747,4 +863,19 @@ newF6 <-  PG(list(F6A_D, F6E_I), ncol = 1, rh = c(1,1.5)) %T>%
   print() %T>% figsave( path = figpath_ni, "Fig6_PublicCOPD_2024_new.pdf", 200, 270) 
 
 proteinlist
+
+
+table(
+COPD_gdTcells@meta.data$disease,
+COPD_gdTcells@meta.data$orig.ident)
+
+Feature_rast(COPD_gdTcells, c("gd_cluster", "disease"))
+
+COPD_gdTcells$orig.ident <-  paste0(COPD_gdTcells$disease, "_", COPD_gdTcells$orig.ident)
  
+Feature_rast(COPD_gdTcells, c( "disease"), facets = "orig.ident", do.label = F, sz = 1.5)
+Feature_rast(COPD_gdTcells, c( "gd_cluster"), facets = "orig.ident", do.label = F, sz = 1.5)
+
+
+Feature_rast(COPD_Tcells, colorgrd = "gg")
+

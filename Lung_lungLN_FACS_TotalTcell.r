@@ -50,8 +50,8 @@ setwd('/home/big/tanlikai/Lung/FACSdata/')
 
 # setwd('/home/big/tanlikai/Lung/PBMCs_Lung_panel_test/lung_LN/')
 dir.create('figs')
-fcsfiles <- list.files(pattern = c('TotalT', 'fcs') )
-file_name <- list.files(pattern = c('TotalT', 'fcs') )
+fcsfiles <- list.files(pattern = c('cells.fcs') )
+file_name <- list.files(pattern = c('cells.fcs') )
 
 # meta data table 
 md <-  data.frame(
