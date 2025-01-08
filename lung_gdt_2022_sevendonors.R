@@ -480,24 +480,18 @@ hgdTmarkers <- FindAllMarkers(GDTlung_s, test.use = 'bimod', min.pct = 0.05,   o
 
 hgdTmarkers
 
-hgdTmarkers %>%  
-  filter(gene %in% c("SELL", "KLRG1", "S1PR1", "KLF2", "RORC", "IL23R", "DPP4", "CCR6"))
-
-bulkDEG_GDT %>%  filter(cluster == "Vg9Vd2-M")  %>% 
-  filter(gene %in% c("SELL", "KLRG1", "S1PR1", "KLF2", "RORC", "IL23R", "DPP4", "CCR6"))
-
-hgdTmarkers %>%  filter(cluster == "Vg9Vd2_M") %>% arrange(desc(pct.dff))
 
 hgdTmarkers%>% arrange( desc(avg_log2FC))
 # hgdTmarkers  %<>% arrange(cluster)
-write.xlsx(hgdTmarkers, 'lung_gdT_DEG_2023June.xlsx')
+write.xlsx(hgdTmarkers, 'lung_gdT_DEG_2025jan.xlsx')
 
+hgdTmarkers
 
-
-top10_hgdT <- hgdTmarkers %>% filter(!grepl('^RP|^MT|^TRA|^TRD|^AC|^HSP|^TRB', gene)) %>% 
+top10_hgdT <- hgdTmarkers  %>% 
   arrange(cluster, desc(avg_log2FC))%>%
-  group_by(cluster) %>% top_n(5, avg_log2FC)
+  group_by(cluster) %>% top_n(10, avg_log2FC)%>% filter(!grepl('^RP|^MT|^TRA|^TRD|^AC|^HSP|^TRB|-AS1|LINC', gene) & pct.1 > 0.075)
 
+top10_hgdT
 
 Feature_rast(GDTlung_s, "AREG", sz = 0.2, color_grd = "threecolor")
 
@@ -506,10 +500,9 @@ DoHeatmap(subset(GDTlung_s,downsample = 500),features = top10_hgdT$gene,raster =
 top10_hgdT$gene
 
 
+cols.use <- list(Cell_cluster = umap.colors, tissue = c("#003399", "#990000"))
 
-cols.use <- list(Cell_cluster = umap.colors, tissue = c("blue", "red"))
-
-DoMultiBarHeatmap(subset(GDTlung_s,downsample = 500),features = top10_hgdT$gene,  group.by='Cell_cluster', size = gs(8),additional.group.sort.by = "tissue", 
+DoMultiBarHeatmap(subset(GDTlung_s,downsample = 500),features = top10_hgdT$gene,  group.by='Cell_cluster', size = gs(7),additional.group.sort.by = "tissue", angle = 20,
                   additional.group.by = c("tissue", "patient"),
                   cols.use =cols.use) %>% heat_theme()
 
@@ -981,6 +974,9 @@ GDTlung_cite@meta.data  %<>%  mutate(Trm= case_when(
   
 )   )
 
+
+
+
 Feature_rast(GDTlung_cite, "Trm")
 
 table(GDTlung_cite$Trm, GDTlung_cite$Cell_cluster)
@@ -1049,17 +1045,26 @@ GDTlung_s$Cell_cluster  %<>% str_replace("TEM_LN2", "TCM_LN2") %>%
   str_replace("TEM_LN3", "TEMRA_LN3")
 
 
+GDTlung_s$Cell_cluster_old <-  GDTlung_s$Cell_cluster
 
-Feature_rast(GDTlung_s, "Cell_cluster")
+GDTlung_s$Cell_cluster  %<>% str_replace("LN3", "_Mix")%>% 
+  str_replace("Vg9Vd2_M", "Vg9Vd2_Mix") %>% 
+  str_replace("_LN4", "_LN1")%>% 
+  str_replace("Naive_LN1", "Naive_LN3") 
+GDTlung_s$Cell_cluster %<>% 
+  factor(levels = c("Vg9Vd2_Mix","gd_TEMRA__Mix" , "gd_TEMRA_LN1","gd_TCM_LN2",
+                    "gd_Naive_LN3","gd_TEMRA_LG1",
+                    "gd_TEMRA_LG2",  "gd_TEMRA_LG3" , "gd_TEMRA_LG4", 
+                    "gd_TRM_LG5" ,   "gd_TRM_LG6"   , "gd_TRM_LG7"    ))
 
-order <- sort(unique(GDTlung_s$Cell_cluster))[c(1,2,7,8,3:6,9:12)]
-order
 
 
- GDTlung_s$Cell_cluster %<>% factor(levels = order)
 Idents(GDTlung_s) <- GDTlung_s$Cell_cluster
- 
- Feature_rast(GDTlung_s)
+
+
+
+Feature_rast(GDTlung_s)
+
 
 
 saveRDS(GDTlung_s, GDTlung.rds)
@@ -1118,27 +1123,7 @@ cl_comp_flow_gd <- ggplot(cl_comp_gd, aes(y = n, x = Cell_cluster, fill = ID,
   NULL
 figsave(cl_comp_flow, "GDTlung_tissue_distribution.pdf", 70,70)
 
-ggplot(cl_comp, aes(y = n, x = Cell_cluster, fill = ID, 
-                    stratum = ID  )) +
-  scale_x_discrete(expand = c(.1, .1)) +
-  geom_stratum(alpha=0.8 ,size = 0.2)+
-  scale_fill_manual(values = ID_cl,
-                    labels = rep(paste0('p', c(25,27,32,45,71,73,77)),2)
-  )+
-  scale_color_manual(values = ID_cl)+
-  theme_minimal() + 
-  ylab('Cell number')+
-  xlab('cluster')+ 
-  xlab(NULL)+
-  scale_y_continuous(labels = abs)+
-  geom_hline(yintercept = 0,size = 0.5)+
-  guides(fill = guide_legend(nrow = 2, title = 'LN\n\nPulm', byrow = T, label.position = 'bottom'),
-         color = F )+
-  # mytheme+
-  theme(legend.position = 'bottom', legend.key.height  = unit(2, 'mm'), legend.key.width   = unit(10,'mm'), axis.text.x = element_text(size = 15, angle = 90),
-        legend.text = element_text(size=15),
-        axis.line = element_blank())+
-  NULL
+
 
 
 
@@ -3591,12 +3576,12 @@ RColorBrewer::brewer.pal(n = 7,name = "Accent")
 cols.use <- list(Cell_cluster = umap.colors, tissue = c("blue", "red"), patient =RColorBrewer::brewer.pal(n = 7,name = "Accent")
   )
 
-F1G <-  DoMultiBarHeatmap(subset(GDTlung_s,downsample = 500),features = top10_hgdT$gene,  group.by='Cell_cluster', size = gs(8),additional.group.sort.by = "tissue", angle = 30,
+F1G <-  DoMultiBarHeatmap(subset(GDTlung_s,downsample = 500),features = top10_hgdT$gene,  group.by='Cell_cluster', size = gs(7),additional.group.sort.by = "tissue", angle = 20,
                   additional.group.by = c("tissue", "patient"),
                   cols.use =cols.use) %>% heat_theme(legend.position = "right") %T>% print()
 
 
-F1_new <-  PG(list(F1AB, F1CD, F1EF,F1G), ncol = 1, rh = c(1, 1.1, 1.3, 3.2), labels = c(NA,NA, NA, "G")) %T>% figsave(path = figpath_ni, "Figure1_test_onlygdT.pdf", 195, 290 )
+F1_new <-  PG(list(F1AB, F1CD, F1EF,F1G), ncol = 1, rh = c(1, 1.1, 1.2, 3.3), labels = c(NA,NA, NA, "G")) %T>% figsave(path = figpath_ni, "Figure1_test_onlygdT.pdf", 195, 290 )
 
 
 Feature_rast(GDTlung_s, "cdr3_TRD_perc",  noaxis = F, navalue = alpha("lightgrey", 0.5),

@@ -16,22 +16,22 @@ library(RColorBrewer)
 
 
 
-mytheme <- theme(plot.title = element_text(size = 8 , face = 'plain'),
-                 plot.subtitle = element_text( face = 'plain',size = 8),
-                 text = element_text(size = 8, face = 'plain'),
-                 legend.title = element_text(size = 8),
-                 strip.text = element_text(size = 8),
-                 legend.text = element_text(size = 8),
-                 axis.title = element_text(size = 8),
+mytheme <- theme(plot.title = element_text(size = 6 , face = 'plain'),
+                 plot.subtitle = element_text( face = 'plain',size = 6),
+                 text = element_text(size = 6, face = 'plain'),
+                 legend.title = element_text(size = 6),
+                 strip.text = element_text(size = 6),
+                 legend.text = element_text(size = 6),
+                 axis.title = element_text(size = 6),
                  axis.line = element_line(size = 0.25),
-                 axis.text = element_text(size = 8))
-heattheme <-   theme(axis.text.y = element_text(size = 8, face = 'italic'),
+                 axis.text = element_text(size = 6))
+heattheme <-   theme(axis.text.y = element_text(size = 6, face = 'italic'),
                      legend.key.height  = unit(2, 'mm'),
                      legend.position = 'bottom',
                      legend.margin = margin(-7,30,0,0, "mm"),
-                     plot.subtitle = element_text(size = 8))
+                     plot.subtitle = element_text(size = 6))
 
-heat_theme <- function(gp,size = 8, legend.position = 'bottom',
+heat_theme <- function(gp,size = 6, legend.position = 'bottom',
                        legend.margin = margin(-7,30,0,0, "mm"),
                        m = 'white', l = 'blue', h = 'red',
                        color = F, fill = NULL, dotsize = F){
@@ -112,7 +112,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
                              features = result$table[c(1:(genetoshow/2),
                                                        (nrow(result$table)-(genetoshow/2-1)):nrow(result$table)
                              ),]$gene)+
-      theme(text = element_text(size = 8), axis.text = element_text(size = 8),
+      theme(text = element_text(size = 6), axis.text = element_text(size = 6),
             legend.key.width = unit(2,'mm'),
             axis.text.y = element_text(face = 'italic'))+mytheme+
       scale_fill_gradient2(low = 'blue', mid = 'white',  high = "red")+
@@ -484,7 +484,7 @@ set_sample <- function(x,  n = NULL, s = 629)  {
 GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
                             rel_h = c(1, 0.1, 0.4),
                             legend.position = 'bottom', c1,c2,
-                            base_size = 8, title = paste('GSEA',c1,'vs',c2), 
+                            base_size = 6, title = paste('GSEA',c1,'vs',c2), 
                             plots = c(1,2,3),
                             col = "green") {
   require(enrichplot)
@@ -492,7 +492,7 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
                          geneSetID = description_to_show,
                          base_size = base_size, pvalue_table = legendpvalue, subplots = 1) +
     theme(legend.position = 'none', line = element_line(size = 0.5),axis.line.x = element_blank(),
-          axis.text.y = element_text(size = 8),
+          axis.text.y = element_text(size = 6),
           axis.line.y = element_line(size = 0.25),
           axis.ticks = element_blank(),
           axis.text.x = element_blank())+
@@ -512,10 +512,10 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
                          geneSetID = description_to_show,base_size = base_size,
                          pvalue_table = F, subplots = 3)+
     theme(legend.position = 'none',           axis.line = element_line(size = 0.25),
-          axis.text = element_text(size = 8),
+          axis.text = element_text(size = 6),
           plot.margin=margin(l=-0.8,unit="cm"),
           panel.grid = element_blank(),
-          axis.title = element_text(size = 8))+
+          axis.title = element_text(size = 6))+
     scale_x_continuous(breaks = c(1, length(x@geneList)), expand = c(0, 0),
                        labels=c(paste(c1,'high'),paste(c2,'high')))
   
@@ -524,7 +524,7 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
     cowplot::get_legend(gseaplot2(x, color = col,
                                   geneSetID = description_to_show,base_size = base_size,
                                   pvalue_table = legendpvalue, subplots = 1)+
-                          theme(legend.position = 'right', legend.text  = element_text(size = 8)))
+                          theme(legend.position = 'right', legend.text  = element_text(size = 6)))
   GSEA_all <- plot_grid(plotlist = GSEA_all_list[plots], ncol = 1, scale = 1,
                         align = "v", axis = 'y', rel_heights = rel_h)
   if (legend.position == 'bottom'){
@@ -587,7 +587,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                        colors = ggplotColours(cln), othertheme = NULL,
                        idents = NULL,alpha_point =0.8, alpha_fill = 0.4, 
                        jitter = T, box = F,
-                       x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 8,
+                       x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 6,
                        assay = DefaultAssay(data),slot = 'data',
                        labels = NULL, labelsize =8, labelface='plain',
                        mythe =F, titleface = 'italic'){
