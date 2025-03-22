@@ -387,9 +387,8 @@ library(dplyr)
 library(patchwork)
 
 COPD_gdTcells@meta.data$disease %>% unique
-COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema",
-                                                                             "GOLD I/II",
-                                                                             "Smoking-related ILD") ~ "COPD",  disease %in% c("Healthy", "Donor") ~ "Control" ))
+COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","moking-related ILD",
+                                                                             "GOLD I/II") ~ "COPD and ILD",  disease %in% c("Healthy", "Donor") ~ "Control" ))
 
 Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl")
 
@@ -404,7 +403,7 @@ copdratio_donor$SUM %>%  unique()
 ggplot(copdratio_donor %>%  filter(SUM > 20), aes(x = COPD_vs_Ctrl, y = percent)) + geom_point()+facet_wrap(~gd_cluster )+ theme(axis.text.x = element_text(angle = 90))
 
 
-COPD_gdTcells_ab <- subset(COPD_gdTcells, COPD_vs_Ctrl %in% c('COPD', "Control") )
+COPD_gdTcells_ab <- subset(COPD_gdTcells, COPD_vs_Ctrl %in% c('COPD and ILD', "Control") )
 
 Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", colorset =c( "cyan", "blue"))
 
@@ -442,8 +441,8 @@ ggplot(da_results, aes(logFC, -log10(SpatialFDR))) +
 
 da_results <- annotateNhoods(COPD_gdTcells_ab_milo, da_results, coldata_col = "gd_cluster")
 head(da_results)
-da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.5, "Mixed", da_results$gd_cluster)
-plotDAbeeswarm(da_results, group.by = "gd_cluster", alpha = 0.15)
+da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.1, "Mixed", da_results$gd_cluster)
+plotDAbeeswarm(da_results, group.by = "gd_cluster", alpha = 1)+mytheme
 
 
 ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
@@ -546,7 +545,10 @@ top15DEG
  AllDEGs_COPD_TRM_TEMRA_TYPE3 %>% filter(gene == "AREG")
  
  AllDEGs_COPD_TRM_TEMRA_TYPE3 <-  FindAllMarkers(COPD_gdTcells %>% 
-                                                 subset(gd_cluster %in%c("gdTRM_1", "gdTemra_1", "Type3_Vd2")),logfc.threshold = 0.25,only.pos = T,min.pct = 0.1) 
+                                                 subset(gd_cluster %in%c("gdTRM_1", "gdTemra_1", "Type3_Vd2")),logfc.threshold = 0.25,only.pos = T,min.pct = 0.1)  %>% arrange(cluster, desc(avg_log2FC))
+ 
+ AllDEGs_COPD_TRM_TEMRA_TYPE3
+ AllDEGs_COPD_TRM_TEMRA_TYPE3  %>%  filter(cluster == "gdTRM_1")
  
  
 Top20_COPD_TRM_TEMRA_TYPE3 <-AllDEGs_COPD_TRM_TEMRA_TYPE3 %>% group_by(cluster) %>% top_n(15, avg_log2FC)
@@ -589,6 +591,10 @@ ClusterCompare(COPD_gdTcells, 'gdTRM_1', 'gdTemra_1', features = TFs_gd)
 genelist_c0_c1 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTemra_1")
 
 genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
+
+genelist_TRM_1_TRM_2 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
+
+
 
 ibrary(clusterProfiler)
 library(msigdbr)
@@ -684,7 +690,7 @@ c1 = "gdTRM_1", c2 =  "gdTemra_1", base_size = 8)
  
  
  
-# Fig6 --------------------------------------------------------------------
+# Fig4 --------------------------------------------------------------------
 
 F6A1 <- Feature_rast(COPD_pub, colorset = "gg", noaxis = T, do.label = F)+NoLegend()+ggtitle("COPD Cell Atlas")
 
@@ -740,6 +746,9 @@ F6BC <- PG(list(F6B, F6C), ncol = 2, rw = c(1, 0.4),labels = c("B", "C")) %T>%  
 
 F6ABC <- PG(list(F6A,F6BC), ncol = 1, rh = c(1,1.5)) %T>%  print()
 
+COPD_gdTcells$disease %>% table()
+
+table(COPD_gdTcells$orig.ident,COPD_gdTcells$disease )
 
 COPD_gdTcells$gd_cluster %>% table()
 
@@ -795,7 +804,7 @@ mytheme+
                         label.position = 'right'))+
      NULL)%T>% print()
 
-F6F <- Feature_rast(COPD_gdTcells, c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7", "EOMES", "TNFRSF18", "CSF1", "GATA3" ), ncol = 3, sz = 0.4,
+F6F <- Feature_rast(COPD_gdTcells, c("STAT1", "NKG7", "EOMES", "NR3C1", "ENTPD1", "GATA3","RORC","CCR6", "DPP4"  ), ncol = 3, sz = 0.4,
                     othertheme = list(coord_fixed(),theme(
                       plot.margin = margin(0,0,-2,-3, "pt"),
                       legend.margin = margin(0,0,0,-10, "pt"))  )  ) %T>% print()
@@ -803,7 +812,11 @@ F6F <- Feature_rast(COPD_gdTcells, c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7", "E
 
 Feature_rast(COPD_gdTcells, c("IRF2", "IRF4", "BATF"))
 
-
+Feature_density(COPD_gdTcells, c("STAT1", "NKG7", "EOMES", "NR3C1", "CSF1", "GATA3","RORC","CCR6", "DPP4"  ), ncol = 3, 
+                # sz = 0.4,
+             othertheme = list(coord_fixed(),theme(
+               plot.margin = margin(0,0,-2,-3, "pt"),
+               legend.margin = margin(0,0,0,-10, "pt"))  )  ) %T>% print()
 
 
 
@@ -878,4 +891,4 @@ Feature_rast(COPD_gdTcells, c( "gd_cluster"), facets = "orig.ident", do.label = 
 
 
 Feature_rast(COPD_Tcells, colorgrd = "gg")
-
+Feature_rast(COPD_gdTcells, c("ident", "NR3C1", "RBPJ", "STAT1", "IRF4"), ncol = 2 )

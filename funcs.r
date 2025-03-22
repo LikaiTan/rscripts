@@ -87,7 +87,7 @@ gglp <- function(p = 'n', s= 3) {
 
 
 ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
-                           rm = "^MT|^RP", test = 'bimod', 
+                           rm = "^MT|^RP", test = 'bimod', angle = 20,
                            p_cutoff = 0.05, assay = 'RNA', slot = "data",
                            do.plot = TRUE, group.colors = NULL, features = NULL,
                            min.pct = 0.1, genetoshow = 50, ds = 500) {
@@ -107,7 +107,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
   print(result$table)
   
   if (do.plot == TRUE) {
-    result$plot <- DoHeatmap(subset(ob, idents = c(id1, id2), downsample = ds),
+    result$plot <- DoHeatmap(subset(ob, idents = c(id1, id2), downsample = ds),angle = angle,
                              raster = T,size = gs(8),group.colors = group.colors,
                              features = result$table[c(1:(genetoshow/2),
                                                        (nrow(result$table)-(genetoshow/2-1)):nrow(result$table)
@@ -155,14 +155,14 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
 # axis number:  whether or not to lable the axis numbers
 # sort: (if gradient) to sort the data frame from low to high
 # labels: if have multiple variables to show, you can assign labels for each one.
-Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
+
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), 
                          facetcol = NULL,
                          mythe =T,
                          titleface = 'italic',colorset = c('um','gg'),    colorgrd = "grd1",
                
-                         do.label = T, labelsize = 10, nrow = NULL, titlesize =8,othertheme = NULL,
+                         do.label = T, labelsize = 10, nrow = NULL, titlesize =6,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
                          labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
                       
@@ -311,7 +311,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
 Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", reduction = 'umap',
                              ncol = min(5, length(feature)), joint =F, method = c("ks", "wkde"),
                             adjust = 1,shape = 16, nrow = NULL,  othertheme = NULL,
-                            mythe =T, titleface = 'italic',titlesize =8,
+                            mythe =T, titleface = 'italic',titlesize =6,
                            noaxis = T, axis.number = F,
                            colorgrd =  "grd1",navalue= "transparent",
                            
@@ -420,7 +420,7 @@ gs(8)
 PG <- function (x, align = c("none", "h", "v", "hv"),
                 axis = c("none", "l", "r", "t", "b", "lr", "tb", "tblr"),
                 nrow = NULL, ncol = NULL, rw = 1, rh = 1,
-                labels = NULL, label_size = 9, label_fontfamily = NULL,
+                labels = NULL, label_size = 8, label_fontfamily = NULL,
                 label_fontface = "bold", label_colour = NULL, label_x = 0,
                 label_y = 1, hjust = 0, vjust = 1.2, scale = 0.93,
                 greedy = TRUE, cols = NULL, rows = NULL) {
@@ -569,11 +569,11 @@ Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP") {
 
 
 
-figsave <- function (p, filename,  w =50, h = 60, device = cairo_pdf,
+figsave <- function (p, filename,  w =50, h = 60, 
                      path = 'figs',
                     scale = 1, units = 'mm', dpi = 300
 ) {
-  ggsave2( plot = p, filename = filename,device = device,
+  ggsave2( plot = p, filename = filename,
            path = path, scale = scale, width = w, height = h,
            units = units, dpi = dpi, limitsize = TRUE)
 }
@@ -589,7 +589,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                        jitter = T, box = F,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 6,
                        assay = DefaultAssay(data),slot = 'data',
-                       labels = NULL, labelsize =8, labelface='plain',
+                       labels = NULL, labelsize =6, labelface='plain',
                        mythe =F, titleface = 'italic'){
   if (length(g) == 1) {
     fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,
@@ -612,7 +612,6 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
       theme(legend.position = 'none',
             axis.text.x = element_text(angle = x.angle, size = size),
             axis.text.y = element_text(size = size),
-            plot.title = element_blank(),
             axis.line = element_blank(),
             axis.title.y = element_text(face = titleface,size = size))+
                     othertheme
@@ -636,7 +635,6 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
       theme(legend.position = 'none',
             axis.text.x = element_text(angle = x.angle, size = size),
             axis.text.y = element_text(size = size),
-            plot.title = element_blank(),
             axis.line = element_blank(),
             axis.title.y = element_text(face = titleface,size = size))+
       othertheme
@@ -996,7 +994,91 @@ DoMultiBarHeatmap <- function (object,
 }
 
 
-
-DoMultiBarHeatmap(GDTlung_s,features = unique(top10_hgdT$gene),  group.by='patient', additional.group.by = "tissue") 
-
+##' Plot TCR Sharing Across Phenotypes as a Circular Dendrogram
+#' 
+#' @param tcr_data A data frame with columns: pheno, TCR, n, uniquename
+#' @param colors Color palette for visualization (default = rev(brewer.pal(6, "Set1")))
+#' @param mytheme Custom ggplot theme (default = theme_minimal())
+#' @param title Plot title (default = "Paired TCR Sharing")
+#' @return A ggraph plot object
+#' @export
+plot_tcr_sharing <- function(tcr_data, 
+                             colors = rev(RColorBrewer::brewer.pal(6, "Set1")),
+                             mytheme = ggplot2::theme_minimal(),
+                             size_range = c(0.1, 5),
+                             title = "TCR Sharing") {
+  
+  # Load required libraries (comment out if already loaded)
+  # library(ggraph)
+  # library(igraph)
+  # library(tidyverse)
+  # library(RColorBrewer)
+  colnames(tcr_data) <-  c("pheno", "TCR", "n", "uniquename")
+  # Ensure input data has required columns
+  required_cols <- c("pheno", "TCR", "n", "uniquename")
+  if (!all(required_cols %in% colnames(tcr_data))) {
+    stop("Input data must contain columns: pheno, TCR, n, uniquename")
+  }
+  
+  # Ensure uniquename is unique and convert to character for consistency
+  tcr_data <- tcr_data %>%
+    dplyr::mutate(uniquename = as.character(uniquename),
+                  pheno = as.character(pheno)) %>%
+    dplyr::distinct(uniquename, .keep_all = TRUE)
+  
+  # Create connections for shared TCRs
+  connect <- tcr_data %>%
+    dplyr::inner_join(tcr_data, by = "TCR", suffix = c(".from", ".to"), 
+                      relationship = "many-to-many") %>%
+    dplyr::filter(uniquename.from < uniquename.to) %>%
+    dplyr::select(from = uniquename.from, to = uniquename.to)
+  
+  # Define edges
+  unique_phenos <- unique(tcr_data$pheno)
+  d1 <- data.frame(from = "origin", to = unique_phenos, stringsAsFactors = FALSE)
+  d2 <- data.frame(from = tcr_data$pheno, to = tcr_data$uniquename, stringsAsFactors = FALSE)
+  edges <- rbind(d1, d2)
+  
+  # Define vertices explicitly including all required names
+  vertices <- data.frame(
+    name = c("origin", unique_phenos, tcr_data$uniquename),
+    value = c(NA, rep(NA, length(unique_phenos)), tcr_data$n),
+    group = c(NA, rep("origin", length(unique_phenos)), as.character(tcr_data$pheno)),
+    stringsAsFactors = FALSE
+  )
+  
+  # Remove any duplicate vertices (just in case)
+  vertices <- vertices %>% dplyr::distinct(name, .keep_all = TRUE)
+  
+  # Debug: Check for mismatches
+  missing_in_vertices <- setdiff(tcr_data$uniquename, vertices$name)
+  if (length(missing_in_vertices) > 0) {
+    warning("These uniquenames are missing from vertices: ", 
+            paste(missing_in_vertices, collapse = ", "))
+  }
+  
+  # Create igraph object
+  mygraph <- igraph::graph_from_data_frame(edges, vertices = vertices)
+  
+  # Generate plot
+  plot <- ggraph(mygraph, layout = "dendrogram", circular = TRUE) +
+    geom_node_point(aes(filter = leaf, x = x, y = y, colour = group, size = value, alpha = 0.2)) +
+    scale_edge_colour_manual(values = colors, guide = FALSE) +
+    geom_conn_bundle(data = get_con(from = match(connect$from, vertices$name),
+                                    to = match(connect$to, vertices$name)), 
+                     alpha = 0.5, width = 0.5, aes(colour = group)) +
+    scale_colour_manual(values = colors) +
+    scale_size_continuous(range = size_range) +
+    mytheme +
+    ggtitle(title) +
+    theme(plot.margin = unit(c(0, 0, 0, 0), "cm")) +
+    guides(alpha = "none", group = guide_legend(order = 1)) +
+    labs(size = "clonal size") +
+    theme_void(base_size = 6)
+  
+  # Print and return plot
+  print(plot)
+  return(plot)
+}
+# Example usage with your pre-processed data:
 

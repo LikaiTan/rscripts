@@ -252,17 +252,46 @@ table(COVID_GDT$Sample.type, COVID_GDT$datasets)
 ClusterCompare(subset(COVID_GDT, datasets == "d07"),id1 = "mild/moderate",
                id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
 
+
+ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh BALF"),id1 = "mild/moderate", log2fc = 3,
+               id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp") 
+
+
+
 d07_pbmc <-  
-ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh PBMC"),id1 = "mild/moderate", log2fc = 0,
+ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh PBMC"),id1 = "mild/moderate", log2fc = 1,
                id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
 
 d07_pbmc$table
 d07_balf <-  
-  ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh BALF"),id1 = "mild/moderate", log2fc = 0,
+  ClusterCompare(subset(COVID_GDT, datasets == "d07" & Sample.type == "fresh BALF"),id1 = "mild/moderate", log2fc = 1, 
                  id2 = "severe/critical", group.by = "CoVID.19.severity", assay = "originalexp")
 
 
 d07_balf
+
+
+d07_pbmc$table$DEG %>%  table()
+d07_pbmc$table     %<>% mutate(DEG = case_when(avg_log2FC >= 1 & p_val_adj < 0.05 ~ "Moderate high (224)", avg_log2FC <= -1 & p_val_adj < 0.05 ~ "severe high (9)"))
+
+d07_balf$table     %<>% mutate(DEG = case_when(avg_log2FC >= 1 & p_val_adj < 0.05 ~ "Moderate high (658) ", avg_log2FC <= -1 & p_val_adj < 0.05 ~ "severe high (18)"))
+
+d07_balf$table$DEG %>%  table()
+d07_balf$plot & coord_flip()
+
+
+intersect(d07_balf$table$gene, d07_pbmc$table$gene)
+
+
+Feature_rast(d07_pbmc$table, d1 = "avg_log2FC", d2 = "p_val_adj", g = "pct.dff")
+
+
+ggplot(d07_pbmc$table, aes(x = avg_log2FC, y = -log10(p_val_adj), color = DEG))+
+  geom_point_rast(size = 0.5)
+
+
+ggplot(d07_balf$table, aes(x = avg_log2FC, y = -log10(p_val_adj),  color = DEG))+
+  geom_point_rast(size = 0.5)
 
 d07_balf$table
 ClusterCompare(COVID_GDT,id1 = "mild/moderate",
@@ -273,6 +302,21 @@ ClusterCompare(COPD_gdTcells, id1 = "Healthy", id2 =  "Donor", group.by = "disea
 Idents(COVID_GDT) <-  "CoVID.19.severity"
 
 Feature_rast(COVID_GDT)
+
+library(eulerr)
+library(ggplotify)
+
+plot(euler( list(balf = d07_balf$table$gene, pbmc = d07_pbmc$table$gene), shape = 'ellipse'), 
+     quantities = list(cex = 0.66),  prob = T,quantities = TRUE,
+     labels = NULL,legend =.y,
+     fill = alpha(umap.colors,0.8), 
+) %>% ggplotify::as.ggplot()
+
+
+plot(euler( list(BAL_gdT = d07_balf$table$gene, pbmc_gdT = d07_pbmc$table$gene) ),
+            quantities = list(cex = 0.66),  prob = F,
+            fill = alpha(umap.colors,0.4), 
+            shape = 'ellipse')
 
 
 # GSEA

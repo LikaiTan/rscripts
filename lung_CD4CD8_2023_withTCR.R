@@ -465,7 +465,7 @@ CD4CD8_cite
 
 Feature_rast(CD4CD8, "PTPRC")
 
-Feature_rast(CD4CD8, "CD4.protein", assay = "CITE")
+Feature_rast(CD4CD8_cite, "CD103.protein", assay = "CITE")
 
 Feature_rast(CD4CD8_cite, CD4CD8@assays$CITE %>%  rownames(), sz = 0.1, ncol = 5,assay = 'CITE', colorgrd = "grd2")  %T>%
   figsave('CD4CD8_Citeseq_allmarkers_rast.pdf', 210, 170)
@@ -1410,10 +1410,10 @@ Cytlist
 
 cd4cd828 <-ClusterCompare(CD4CD8, 'TRM_1_LG', 'TRM_3_LG', features = TFs_T)
 
-
+ClusterCompare(CD4CD8, 'TRM_1_LG', 'TRM_3_LG')
 cd4cd828$plot
 
-ClusterCompare(CD4CD8, 'TRM_1_P', 'TRM_3_P', features = Cytlist,genetoshow = 20)
+ClusterCompare(CD4CD8, 'TRM_1_LG', 'TRM_3_LG', features = Cytlist,genetoshow = 20)
 
 
 ClusterCompare(CD4CD8, 'TRM_1_LG', 'Th17_M', features = Cytlist,genetoshow = 20)
@@ -1775,103 +1775,27 @@ DEGreg %>% view()
 DEGreg   %<>% filter(p_val_adj < 0.01)
 view(DEGreg)
 
-ClusterCompare(CD4CD8, "TRM_1_LG", "TRM_3_LG", assay = "REG", log2fc = 0.01)
+ClusterCompare(CD4CD8, "TRM_1_LG", "TRM_3_LG", assay = "AUC", log2fc = 0.01)
 
-# GSEA --------------------------------------------------------------------
-
-library(clusterProfiler)
-library(org.Hs.eg.db)
-
-library(msigdbr)
-
-msigdbr_collections() %>%  as.data.frame()
+CD4CD8@assays$AUC
 
 
-Mc7 <- msigdbr::msigdbr(species = "Homo sapiens", category = "C7") %>%
-  dplyr::select(gs_name, entrez_gene)
+allregs_TRM1_3 <-  ClusterCompare(CD4CD8, "TRM_1_LG", "TRM_3_LG", assay = "AUC", log2fc = 0.00,p_cutoff = 0.8)
 
-Hallmarks <- msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>%
-  dplyr::select(gs_name, entrez_gene)
 
-GO_BP <- msigdbr::msigdbr(species = "Homo sapiens", category = "C5", subcategory = 'BP') %>%
-  dplyr::select(gs_name, entrez_gene)
+ggplot(allregs_TRM1_3$table, aes(x = avg_log2FC , y = -log10(p_val_adj ), color = abs(avg_log2FC)*-log10(p_val_adj )  ))+ geom_point()
+regulons <- c("RORA-REG", "MAF-REG", "RUNX2-REG", 
 
-Mc2 <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C2") %>%
-  dplyr::select(gs_name, entrez_gene)
+              "EOMES-REG", "TBX21-REG", "RUNX3-REG")
 
 
 
+ViolinPlot(CD4CD8 %>%  subset(Cell_pheno %in% c("TRM_1_LG" , "TRM_3_LG")), box = T,  sz = 0.2,
+           x.angle = 330, ylabtext = "value",  ncol = 4, g = regulons,
+           othertheme = list(stat_compare_means(  paired = F, method = 'wilcox.test',label = "p.format" ),
+                             theme(axis.text.x = element_blank(), axis.title.y = element_blank(), plot.title = element_text(size = 6))),
+           assay = "AUC", colors = umap.colors[c(12,14)]) %T>%  print()
 
-Msig_refs <- list(Mc7, Mc2, Hallmarks, GO_BP) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-Msig_refs$GOBP
-
-
-TEMRA_TRM_3 <- entrezlist_generator(CD4CD8, id1 = "Temra_1_LG", id2 = "TRM_3_LG")
-
-TEMRA_TRM_3_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
-  ge <-   GSEA(geneList = TEMRA_TRM_3, TERM2GENE=x,  
-               pvalueCutoff = 0.05) %>%
-    setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
-  ge@result %>% arrange(desc(NES))  %>%
-    write.xlsx(paste0('CD4CD8_TEMRA_TRM_3_Msigdb_',y,'_.xlsx') )
-  print(nrow(ge@result))
-  return(ge)
-}) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-
-
-
-C2_C10_msigdb <- readRDS('CD4CD8_c2_vs_c10_GSEA.rds')
-
-C3_C10_msigdb <- map2(Msig_refs,c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'), function(x,y) {
-  ge <-   GSEA(geneList = ent3_10, TERM2GENE=x,  
-               pvalueCutoff = 0.05) %>%
-    setReadable(OrgDb = org.Hs.eg.db, keyType="ENTREZID") 
-  ge@result %>% arrange(desc(NES))  %>%
-    write.xlsx(paste0('CD4CD8c3_to_c10_Msigdb_',y,'_.xlsx') )
-  print(nrow(ge@result))
-  return(ge)
-}) %>%  setNames(c('Mc7', 'Mc2', 'Hallmarks', 'GOBP'))
-
-
-
-map(c(Mc7, Mc2, Hallmarks, GO_BP), ~ get_obj_name() )
-
-
-
-c2_c10_Msigdb_GSEA@result  <- c2_c10_Msigdb_GSEA@result %>% arrange(desc(NES)) 
-write.xlsx(c2_c10_Msigdb_GSEA@result , 'CD4CD8c2_to_c10_Msigdb_c7.xlsx')
-
-
-view(c2_c7_Msigdb_GSEA@result)
-Feature_rast(CD4CD8)
-ClusterCompare(CD4CD8, '3', '6')
-ClusterCompare(CD4CD8, '3', '10')
-
-
-ClusterCompare(CD4CD8, 'C13', 'C17')
-
-
-Feature_rast(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
-Feature_density(CD4CD8, c('CTLA4', 'PDCD1', 'HAVCR2', 'TNFRSF18'))
-
-
-Feature_rast(CD4CD8, grep('^^KIR2|KIR3', rownames(CD4CD8), value = T))
-ViolinPlot(CD4CD8, grep('^KIR2|KIR3', rownames(CD4CD8), value = T), colors = umap.colors)
-
-DEG_CD8Trm_CD8Tcirc<- ClusterCompare(CD4CD8, '10', '3')
-DEG_CD8Trm_CD8Tcirc$table
-
-DEG_CD8Trm_CD8Tcirc_TF<- ClusterCompare(CD4CD8, '10', '3', features = TFs)
-DEG_CD8Trm_CD8Tcirc_TF$plot
-
-
-Feature_density(CD4CD8, c('NCAM1', 'NCR1','CD3E', 'KIR2DL3', 'KIR2DL4'))
-
-Feature_rast(CD4CD8, c('NCAM1', 'NCR1', 'CD7', 'KIR2DL3', 'KIR2DL4'), sz = 0.2, color_grd = 'threecolor', mid.point = 0.7)
-
-Feature_rast(CD4CD8, c(
-  'ident', 'tissue'
-), sz = 0.2)
 
 # # GSEA genesymobl instead --------------------------------------------------------------------
 
@@ -2163,6 +2087,65 @@ CD4CD8@meta.data %<>% mutate(TRAVJ = case_when(!is.na(v_gene_TRA)  & !is.na(j_ge
 
 saveRDS(CD4CD8, CD4CD8RDS)
 # mait cells 
+
+
+# TCRJsharing Edge plot  --------------------------------------------------
+
+
+
+
+
+# Libraries
+library(ggraph)
+library(igraph)
+library(tidyverse)
+library(RColorBrewer)
+
+
+# GDTlung_s@meta.data %<>%  mutate(pheno = str_replace(pheno, "memory", "circ") ) 
+
+CD4TRB_data_meta <- CD4CD8@meta.data %>%  
+  filter(cdr3_paired_freq > 1 &  CD4CD8 == "CD4" & 
+           (Cell_pheno %in% c("TCM_1_M", "TCM_2_M", "TCM_3_M", "TEM_M", "Temra_1_LG", "Th17_M", "TRM_1_LG"))) %>% 
+  # filter((grepl("LG", Cell_pheno))  & tissue == "Lung" | !(grepl("LG", Cell_pheno) ) & tissue == "LLN")  %>% 
+  filter(!(str_detect(Cell_pheno, "TCM") & tissue == "LLN")) %>%
+  mutate(Cell_pheno = str_replace(Cell_pheno, "TCM_\\d_M", "TCM_LN") )  
+
+CD4TRB_data_meta$Cell_pheno
+
+CD4_TRB_data <- CD4TRB_data_meta %>%  group_by(Cell_pheno) %>%  
+  dplyr::count(cdr3_paired) %>% arrange(Cell_pheno, desc(n))%>% 
+  # filter(n>1 )%>%
+  mutate(Cell_pheno = factor(Cell_pheno, levels= c("TCM_LN", "Th17_M", "TRM_1_LG", "TEM_M", "Temra_1_LG")),
+         uniquename = paste(Cell_pheno, cdr3_paired))
+
+# GDTlung_s@meta.data %<>%  mutate(pheno = str_replace(pheno, "memory", "circ") ) 
+
+CD8TRB_data_meta <- CD4CD8@meta.data %>%  
+  filter(cdr3_paired_freq > 1 &  CD4CD8 == "CD8" & 
+           (Cell_pheno %in% c("TCM_1_M", "TCM_2_M", "TCM_3_M", "TEM_M", "Temra_1_LG", "Th17_M", "TRM_1_LG", "TRM_3_LG"))) %>% 
+  filter(!(str_detect(Cell_pheno, "TCM") & tissue == "LLN")) %>%
+  mutate(Cell_pheno = str_replace(Cell_pheno, "TCM_\\d_M", "TCM_LN") )  
+
+
+CD8TRB_data_meta$Cell_pheno
+
+CD8_TRB_data <- CD8TRB_data_meta %>%  group_by(Cell_pheno) %>% 
+  dplyr::count(cdr3_paired) %>% arrange(Cell_pheno, desc(n))%>% 
+  # filter(n>1 )%>%
+  mutate(Cell_pheno = factor(Cell_pheno, levels= c("TCM_LN", "Th17_M", "TRM_1_LG", "TEM_M", "Temra_1_LG", "TRM_3_LG")),
+         uniquename = paste(Cell_pheno, cdr3_paired)) 
+
+CD8_TRB_data
+CD4_TCR_sharing <-  plot_tcr_sharing(CD4_TRB_data, title = "CD4+ TCR Sharing Across Clusters") %T>% print()
+
+
+CD8_TCR_sharing <-  plot_tcr_sharing(CD8_TRB_data, title = "CD8+ TCR Sharing Across Clusters") %T>% print()
+
+
+
+
+
 # TCR similarity ----------------------------------------------------------
 # library(scRepertoire)
 library(immunarch)
@@ -2310,11 +2293,11 @@ clonalOverlap(combined2, cloneCall="cdr3_TRD", method="overlap")
 library(reldist)
 
 ABTPairedfreq <-  CD4CD8@meta.data%>% 
-  filter(!is.na(paired)) %>% 
+  filter(!is.na(paired) & Cell_pheno != "unidentified_LG"  ) %>% 
   dplyr::count(CD4CD8, patient, Cell_pheno, cdr3_TRB) %>%
   arrange(desc(n))
 
-ABTPairedfreq
+ABTPairedfreq$Cell_pheno
 
 
 
@@ -2322,14 +2305,16 @@ gini_ABTpaire <-  ABTPairedfreq %>%
   dplyr::group_by(CD4CD8, patient, Cell_pheno) %>%
   summarise(Gini_Index = gini(n), sum = sum(n))  %>%
   mutate(Gini_Index = replace(Gini_Index, sum < 10, NA))%>% 
+  filter(Cell_pheno != "unidentified_LG"  ) %>% 
   dplyr::rename(CD4orCD8 = CD4CD8 ) %>% ungroup() %>% 
-  tidyr::complete(CD4orCD8, patient, Cell_pheno , 
+  tidyr::complete(CD4orCD8, patient, 
                   fill = list(Gini_Index = NA, sum = NA))
 
 
 
 
-gini_ABTpaire
+
+gini_ABTpaire$Cell_pheno
 
 
 
@@ -3604,107 +3589,70 @@ TRM_1_Th17_DEG$plot
 # Figure for manuscript --------------------------------------------------------
 
 
-# Fig 1 and S1 ------------------------------------------------------------
+# Fig 5 and S1 ------------------------------------------------------------
 # A Workflow
 # B and D Umap abT and Umap CD4CD8 
 
-# F1A T cells sorting
+# F5A T cells sorting
 
-Sortting_s <- xlsx::read.xlsx(file = "LungTsorting .xlsx", sheetIndex = 1) %T>% print() 
-
-Sortting <- xlsx::read.xlsx(file = "LungTsorting .xlsx", sheetIndex = 1) %>%
-  rename("Total_T" = "Total_T_of_CD45") %>% 
-  reshape2::melt(
-  id.vars = c("donor", "Tissue"), 
-  value.name = "Percent")  %>% 
-  mutate(Percent = Percent * 100) %>% 
-  rename("variable" = "Cell_Type")%T>% 
-  print() 
-
-Sortting$Percent %>% unique
-
-
-pv_wilcox <- Sortting %>%   
-  group_by(Cell_Type) %>% 
-  wilcox_test(Percent ~ Tissue, paired = T,conf.level = 0.95, exact = TRUE, p.adjust.method = "fdr") %T>% print() 
-
-Sortting %>%   
-  group_by(Cell_Type) %>%
-  wilcox_effsize(Percent ~ Tissue)
-Sortting
-new_labels <- c(CD4_of_CD45 = "CD4", CD8_of_CD45 = "CD8", gdT_of_CD45= "gdT", Total_T_of_CD45 = 'Total T')
-
-F1B <- ggplot(Sortting %>%  filter(grepl("of_CD45", Cell_Type)), aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point(size = 1)+
-  geom_line(color = "grey",linewidth = 0.2)+ xlab(NULL)+ylab("Percentage of CD45")+
-  facet_grid(~Cell_Type, shrink = T, labeller = labeller(Cell_Type = new_labels))+color_m(color = c("blue", "red"))+
-  theme_minimal()+mytheme+NoLegend()+
-  stat_compare_means(aes(group = Tissue), label = "p", method = "wilcox", paired = T, size = gs(8))
-F1B
-ggsave2("F1B.svg", path = figpath_ni, width = 10, height = 5)
-
-figsave(F1B, "F1B.svg", path = figpath_ni)
-
-ggplot(Sortting , aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point(size = 1)+
-  geom_line(color = "grey",linewidth = 0.2)+ xlab(NULL)+ylab("Percentage of CD45")+
-  facet_grid(~Cell_Type, shrink = T)+color_m(color = c("blue", "red"))+
-  theme_minimal()+mytheme+NoLegend()+
-  stat_compare_means(aes(group = Tissue), label = "p", method = "wilcox", paired = T, size = gs(8))
-
-F1AB <- PG(list(NA, F1B), labels = "AUTO", rw = c(1.5,1)) %T>% print()
-
-figsave(F1A, "subs
-        ets_of_totalT_and_CD45.pdf", w = 190, 60)
-
-ggplot(Sortting, aes(x = Tissue, y = Percent, color = Tissue, group = donor)) +geom_point()+geom_line(color = "grey")+ xlab(NULL)+ylab("% of CD45")+
-  facet_wrap(~Cell_Type)+color_m(color = c("blue", "red"))+
-  theme_minimal()+mytheme+NoLegend()+
-  stat_compare_means(aes(group = Tissue), label = "p", 
-                     method = "wilcox", paired = T, size = gs(10))
-
-
-# F1C
-F1C <- (Feature_rast(CD4CD8, sz = 0.3,
-                             labelsize = 8,
-                             noaxis = F, othertheme = coord_fixed()
+# F5C
+F5A <- (Feature_rast(CD4CD8, sz = 0.3,
+                             labelsize = 4,
+                             noaxis = F, othertheme = list(coord_fixed(),theme(legend.spacing.x = unit(1, 'mm'),
+                                                                               legend.margin = margin(0,0,5,0, "mm")))
                              
-)+ggtitle('abT cells')) %T>% print() 
-F1C
+)+ggtitle('abT cells')+guides(color = guide_legend(ncol = 3,position = "bottom",
+                                                      
+                                                   override.aes = list(size = 1.5)))
+) %T>% print() 
+F5A
 
 
 
-
-F1D <-  Feature_rast(CD4CD8_cite, c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein"), sz = 0.2,colorgrd = "grd2",ncol = 2,   othertheme =list(theme(
-  legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())
-) %T>%  print()
-
+theme = theme(legend.key.size = unit(0.5, "mm") ,legend.spacing.y = unit(1, 'mm'))
 
 CD4CD8_cite@assays$CITE@counts %>%  rownames()
 
-F1D15 <-  map( c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "CD127.protein"), ~ 
-                 Feature_rast(CD4CD8_cite, ., colorgrd = "grd2",     sz = 0.2,othertheme = list(theme(
-                   legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   )   + NoLegend()         
-)
+# F5B15 <-  map( c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "CD26.protein"), ~ 
+#                  Feature_rast(CD4CD8_cite, ., colorgrd = "grd2",     sz = 0.2,othertheme = list(theme(
+#                    legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   )        
+# )
+# 
+#  map( c("CD103.protein", "CD45RA.protein", "CD27.protein" , "CD26.protein", "KLRG1.protein", "CD8.protein"), ~ 
+#                  Feature_rast(CD4CD8_cite, ., colorgrd = "grd2",     sz = 0.2,othertheme = list(theme(
+#                    legend.margin = margin(0,0,0,-10, "pt")), 
+#                    scale_m("grd2",  limits = c(0,3)),
+#                    coord_fixed())   )        
+# ) %>% PG()
+# 
+# F5B15[[5]]
+# 
+# 
+# F5B6 <-  Feature_rast(CD4CD8_cite, "KLRG1.protein", colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
+#   legend.margin = margin(0,0,0,-10, "pt")),
+#   scale_m("grd2", c(0,1, 2), c(0,2)),
+#   coord_fixed())   )  
+# F5B6
+# F5B15[[6]] <- F5B6
+# 
+# F5B <- PG(F5B15, ncol = 3)
+# F5B
+# 
+# 
+# Feature_rast(CD4CD8_cite, c("CD4.protein", "CD8.protein"), colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
+#   legend.margin = margin(0,0,0,-10, "pt")),
+#   scale_m("grd2", c(0,1, 2), c(0,2)),
+#   coord_fixed())   )  
 
-F1D6 <-  Feature_rast(CD4CD8_cite, "KLRG1.protein", colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
-  legend.margin = margin(0,0,0,-10, "pt")),
-  scale_m("grd2", c(0,1, 2), c(0,2)),
-  coord_fixed())   )  + NoLegend()  
-F1D6
-F1D15[[6]] <- F1D6
 
-F1D <- PG(F1D15, ncol = 2)
-F1D
+Feature_density(CD4CD8,c("AREG", "IFNG", "GZMB", "GZMA"))
 
 
+# F5C <-  Feature_rast(CD4CD8, "ID", colorset = ID_cl, do.label = F, sz = 0.3,  noaxis = F,
+#                      othertheme = list( NoLegend(),coord_fixed())) %T>% print()
 
 
-F1CD <-  PG(list(F1C, F1D), labels = c("C", "D"), rw = c(1.5,1)) %T>% print()
-
-
-F1E <-  Feature_rast(CD4CD8, "ID", colorset = ID_cl, do.label = F, sz = 0.3, othertheme = list( NoLegend(),coord_fixed())) %T>% print()
-
-
-F1F <- ggplot(comp_tissue, aes(y = n, x = Cell_pheno, fill = ID, color = ID,
+F5B <- ggplot(comp_tissue, aes(y = n, x = Cell_pheno, fill = ID, color = ID,
                                 stratum = ID  )) +
   scale_x_discrete(expand = c(.1, .1)) +
   geom_stratum(alpha = .6)+
@@ -3722,94 +3670,422 @@ F1F <- ggplot(comp_tissue, aes(y = n, x = Cell_pheno, fill = ID, color = ID,
     axis.text.x = element_text(angle = 90, size = 8),
     
     axis.line = element_blank())+
-  NoLegend()
+  # NoLegend()
 NULL
-F1F
-
-F1I <-  Feature_rast(GDTlung_s, "ID", colorset = ID_cl, do.label = F, sz = 0.3, othertheme = list( NoLegend(),coord_fixed()))  %T>% print()
 
 
-Feature_rast(GDTlung_s, "ID", colorset = ID_cl, do.label = F, sz = 0.3, othertheme = list( coord_fixed()))  %T>% print()
+F5C1 <-  map( c("CD103.protein", "CD49a.protein",  "CD45RA.protein", "CD27.protein" , "CD26.protein","CD94.protein"), ~ 
+               Feature_rast(CD4CD8_cite, ., colorgrd = "grd2",     sz = 0.1,othertheme = list(theme(
+                 legend.position = "none"), 
+                 coord_fixed())   )        
+) %>% PG(ncol = 3) %T>% print()
 
-Feature_rast(CD4CD8, "ID", colorset = ID_cl, do.label = F, sz = 0.3) 
+
+F5C2 <-  map( c("KLRG1.protein", "CD4.protein" , "CD8.protein"), ~ 
+                Feature_rast(CD4CD8_cite, ., colorgrd = "grd2",     sz = 0.1,othertheme = list(theme(
+                  legend.margin = margin(0,0,0,-10, "pt")), 
+                  scale_m("grd2",  limits = c(0,3.5)),
+                  coord_fixed())   )        
+) %>% PG(ncol = 3) 
+F5C2
 
 
-F1J <- ggplot(cl_comp_gd, aes(y = n, x = Cell_cluster, fill = ID, 
-                               color = ID,
-                               stratum = ID  )) +
-  scale_x_discrete(expand = c(.1, .1)) +
-  geom_stratum(alpha=0.8 ,size = 0.2)+
-  scale_fill_manual(values = ID_cl,
-                    labels = rep(paste0('p', c(25,27,32,45,71,73,77)),2)
-  )+
-  scale_color_manual(values = ID_cl)+
-  theme_minimal() + 
-  ylab('Cell no. of\ncluster per donor')+
-  # xlab('cluster')+ 
-  xlab(NULL)+
-  ggtitle("gd T cell tissue distribution")+
-  scale_y_continuous(labels = abs)+
-  geom_hline(yintercept = 0,size = 0.5)+
-  guides(fill = guide_legend(nrow = 2, title = 'LLN\n\nLung',
-                             byrow = T, label.position = 'bottom',
-                             override.aes = list(color = "white")),
-         color = F )+
-  mytheme+
-  theme(legend.position = 'bottom', 
-        
-        legend.key.height  = unit(5, 'mm'), 
-        legend.key.width   = unit(5,'mm'), 
-        axis.text.x = element_text(size = 8, angle = 90),
-        legend.text = element_text(size=8),
-        axis.line = element_blank())+
-  NULL
+F5C <-  PG(list(F5C1, F5C2), ncol = 1, rh = c(2,1))
 
-F1J
 
-lgd <-  get_legend(F1J) %>% ggplotify::as.ggplot()
+Feature_rast(CD4CD8_cite,c("CD103.protein", "CD49a.protein",  "CD45RA.protein"), sz = 0.2, colorgrd = "grd2" )  %>% figsave("F5test.pdf", 150,50)
 
-F1EFIJ <- PG(list(F1E, F1F, F1I, (F1J+NoLegend()), lgd), labels = c("E", "F", "I", "J", NA),ncol = 2, rw = c(1,1.2), rh = c(1,1,0.15)) %T>% print()  
+figsave(F5C, "F5C.pdf", 150, 150)
 
-Feature_rast(GDTlung_s, sz = 0.3, "AREG",
-             labelsize = 8,
-             noaxis = F, legendcol = 2, othertheme = coord_fixed())
 
-F1G <- (Feature_rast(GDTlung_s, sz = 0.3,
-                     labelsize = 8,
-                     noaxis = F, legendcol = 3, othertheme = coord_fixed()
+F5ABC <-  PG(list(F5A, F5B, F5C), ncol = 3  , labels = "AUTO", rw = c(1, 1.4, 1.2) )  %T>% print()
+
+
+F5D <- (Feature_rast(CD4CD8, sz = 0.3,
+                     g= "CD4CD8", do.label = F,
+                     othertheme = coord_fixed(),
+                     noaxis = F
                      
-)+ggtitle('gdT cells')+gglp(p = "b"))%T>% print() 
-
-F1H <-  Feature_rast(GDTlung_cite, c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "IL7R.protein"), colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
-  legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   ) %T>% print()
+)+ggtitle('CD4+ and CD8+ T cell distribution')+
+  theme(legend.position = c(0.05, 00.05), legend.justification = c(0.05, 0.05))
 
 
-
-F1H15 <-  map( c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "IL7R.protein"), ~ 
-                 Feature_rast(GDTlung_cite, ., colorgrd = "grd2",     sz = 0.2,othertheme = list(theme(
-                   legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   )             
-                 )
-
-F1H6 <-  Feature_rast(GDTlung_cite, "KLRG1.protein", colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
-  legend.margin = margin(0,0,0,-10, "pt")),
-  scale_m("grd2", c(0,0.5, 1,1.5), c(0,1.5)),
-  coord_fixed())   )
-
-F1H15[[6]] <- F1H6
-
-F1H <- PG(F1H15, ncol = 3)
-F1H
-
-PG(F1H15, ncol = 2)
+) %T>% print() 
 
 
-F1GH <- PG(list(F1G, F1H), labels = c('G', 'H'), ncol = 1, rh = c(1.3,1))
-F1EFIJGH <- PG(list(F1EFIJ,F1GH), ncol = 2, rw = c(1.6,1) ) %T>% print()
 
 
-F1_new <- PG(list(F1AB, F1CD, F1EFIJGH), ncol = 1, rh = c(0.6,1,2)) %T>% print() %T>% figsave("Fig1_2024_new_design_1.pdf", 200, 260, path = figpath_ni)
 
-F1_new
+
+
+GMS_long <- FetchData(CD4CD8, c("CD4CD8", "Cell_pheno", names(sigtable))) %>% 
+  reshape2::melt(value.name = "score" ) %>% 
+  mutate(variable = if_else(variable =="CD8.Cytotoxictiy","Cytotoxicity",variable ) )
+
+names(sigtable)
+
+sigtable$Th1
+
+head(GMS_long)
+GMS_long$variable %>% unique()
+
+nrow(GMS_long)
+
+GMS_long %>% group_by(variable) %>% count()
+
+GMS_long %>% group_by(CD4CD8, Cell_pheno, variable) %>% count() %>% filter(n < 150) %>% ungroup() %>% 
+  distinct(CD4CD8, Cell_pheno)
+
+GMS_long  %<>% 
+  filter(!((CD4CD8 == 'CD4' &  Cell_pheno  %in% c("TRM_2_LG", "TRM_3_LG")) | (CD4CD8 == "CD8" & Cell_pheno == "Treg_LN")))
+
+GMS_long  %>% 
+  filter((CD4CD8 == 'CD4' &  Cell_pheno  %in% c("TRM_2_LG", "TRM_3_LG")) | (CD4CD8 == "CD8" & Cell_pheno == "Treg_LN"))
+
+
+F5E <- (ggplot(GMS_long %>% filter(variable %in% c( "Tissue.resident", "Th17", "Cytotoxicity") & Cell_pheno != "unidentified_LG" ) %>% 
+                 mutate(variable = factor(variable, level = c( "Tissue.resident", "Th17", "Cytotoxicity"))), 
+               aes(x = Cell_pheno, y = score, fill = CD4CD8))+
+          geom_violin_rast(size = 0.1) +
+          facet_wrap(~variable, ncol = 1, strip.position = "right", scales = "free_y")+
+          ylab("module score")+xlab(NULL)+
+          geom_boxplot( alpha = 0.5, size = 0.1,notch = F,
+                        outlier.alpha = 0,show.legend = FALSE)+
+          
+          fill_m()+
+          theme_minimal()+
+          mytheme+
+          # guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
+          #   
+          # )+
+          NoLegend()+
+          theme(axis.text.x = element_text(size = 8 , angle = 90))
+        
+) %T>% print() 
+
+Feature_density(CD4CD8, c("IFNG", "GZMB","AREG"))
+
+
+
+
+
+F5F <- ggplot(gini_ABTpaire, aes(x = Cell_pheno , y = Gini_Index, 
+                          color = patient, group= Cell_pheno))+geom_boxplot(show.legend = FALSE, outlier.colour = "transparent")+
+  geom_point(size = 0.5)+facet_wrap(~CD4orCD8,ncol = 1)+
+  color_m(color = RColorBrewer::brewer.pal(n = 7,name = "Accent"))+theme_minimal()  +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.margin = margin(0,0,0,-10, "pt"))+mytheme+
+  guides(color = guide_legend(override.aes = list(size = 1)))
+
+
+F5DEF <-  PG(list(F5D, F5E, F5F), ncol = 3  , labels = c("D", "E", "F"), rw = c(1, 1.2, 1) )  %T>% print() 
+
+
+
+# PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6)) %T>%  print()
+
+# F5G TFs   
+
+
+
+PG(list(F5ABC, F5DEF), ncol = 1)
+
+
+F5G_velo <-  NA
+
+CD4_TCR_sharing <-  plot_tcr_sharing(CD4_TRB_data, title = "CD4+ TCR Sharing Across Clusters",size_range = c(0.1, 3)) + coord_fixed()+gglp(p = "b")
+
+
+CD8_TCR_sharing <-  plot_tcr_sharing(CD8_TRB_data, title = "CD8+ TCR Sharing Across Clusters", size_range = c(0.1, 3)) + coord_fixed()+gglp(p = "b")
+
+F5H_TCR <-  PG(list(CD4_TCR_sharing,CD8_TCR_sharing ), align = "hv") %T>% print()
+
+F5GH <-  PG(list(F5G_velo, F5H_TCR), labels = c("G", "H"), rw = c(1,1)) %T>% print()
+
+# F5I_reg 
+regulons <- c("RORA-REG", "MAF-REG", "RUNX2-REG", 
+              
+              "EOMES-REG", "TBX21-REG", "RUNX3-REG")
+
+
+
+F5I_reg <-  ViolinPlot(CD4CD8 %>%  subset(Cell_pheno %in% c("TRM_1_LG" , "TRM_3_LG")), box = T,  sz = 0.2,
+           x.angle = 330, ylabtext = "value",  ncol = 3, g = regulons,
+           othertheme = list(stat_compare_means(  paired = F, method = 'wilcox.test',label = "p.format" ),
+                             theme(axis.text.x = element_blank(), axis.title.y = element_blank(), plot.title = element_text(size = 6))),
+           assay = "AUC", colors = umap.colors[c(12,14)]) %T>%  print()
+
+
+F5J_genes  <-  Feature_density(CD4CD8, c("RORA", "RUNX2",  "EOMES", "RUNX3" , "GATA3", "ZNF683",
+                                         "CD40LG", "IL17A",  "CTLA4", "GZMA",  "GZMB", "AREG" )  , ncol = 4,
+                               othertheme =   list(theme(
+                                 legend.position = "none"),
+                                 coord_fixed()
+                                 
+                               ))  %T>% print()
+  
+
+F5IJ <-  PG(list(F5I_reg, F5J_genes), labels = c("I", "J"), rw = c(1,1)) %T>% print()
+F5 <-  PG(list(F5ABC, F5DEF, F5GH, F5IJ), ncol = 1, rh = c(2.4,2.2,2,2)) %T>% print()
+
+figsave(F5, "figure5_new_AbT_2025_v2.pdf",200, 280)
+
+
+
+
+F5 <-  PG(list(F5ABC, F5DEF, F5G, F5I), ncol = 1, rh = c(2.4,2.2,1,1.5)) %T>% print()
+
+figsave(F5, "figure5_new_AbT_2025_v2.pdf",200, 230, path = figpath_ni)
+
+
+
+F5G <-  Feature_density(CD4CD8, c("TBX21", "EOMES", "GATA3",  "ZNF683", "RORC", "RUNX2", "RUNX3")  , ncol = 7,
+                     othertheme =   list(theme(
+                       legend.position = "none"),
+                       coord_fixed()
+                       
+                     ))  %T>% print()
+
+trmcl2 <- c(
+  "TEM_M",
+  "Th17_M",
+  "Temra_1_LG",
+  "TRM_1_LG",
+  # "TRM_2_LG",
+  "TRM_3_LG"
+  # "Temra_2_P"
+  
+)
+genef22  <-  c( "CD40LG", "IL17A",  "CTLA4", "GZMA", "GZMK", "GZMB", "AREG")
+Feature_density(CD4CD8, genef22  , ncol = 7,
+                othertheme =   list(theme(
+                  legend.position = "none"),
+                  coord_fixed()
+                  
+                ))  %T>% print()
+
+F5I <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef22, colors = umap.colors, 
+                   box = F, ncol =7, sz = 0.2, othertheme = theme(axis.text.x = element_text(angle = 70, vjust = 0))
+)  %T>% print()
+
+
+F5 <-  PG(list(F5ABC, F5DEF, F5G, F5I), ncol = 1, rh = c(2.4,2.2,1,1.5)) %T>% print()
+
+figsave(F5, "figure5_new_AbT_2025.pdf",200, 230, path = figpath_ni)
+
+
+
+trmcl <- c(
+  
+  "TEM_M",
+  "Temra_1_LG",
+  "TRM_1_LG",
+  "TRM_2_LG",
+  "TRM_3_LG"
+  # "Temra_2_P"
+  
+)
+
+
+
+# Feature_rast(CD4CD8)
+# 
+# F2D <-( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
+#                 features = rev(c(unique(top10TF_TRM$gene), "TOX", "RORC"))
+# )+mytheme+heattheme+
+#   
+#   theme(text = element_text(size = 8),
+#         axis.text.y = element_text(size = 8),
+#         axis.line.y.left = element_line(),
+#         axis.text.x = element_text(size = 8, angle= 90,face = "italic"),
+#         legend.box.margin = margin(5,0,0,5,unit = 'mm'),
+#         legend.box = "horizontal",legend.position = 'bottom',
+#         axis.title = element_blank())+
+#   # coord_flip()+
+#   scale_y_discrete(position = 'right')+
+#   scale_x_discrete(position = 'bottom')+
+#   xlab(NULL)+ylab(NULL)+
+#   ggtitle("Transcription factors")+
+#   viridis::scale_color_viridis(discrete = F, option ="D")+
+#   guides(
+#     color = guide_colorbar(title.position = 'top',direction = 'horizontal',
+#     ),
+#     size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom'))+
+#   NoLegend()
+# )  %T>% print()
+# 
+# 
+# 
+# F2C <-  DoHeatmap(CD4CD8 %>% subset(downsample = 500,Cell_pheno %in% trmcl), features = top5_48_reg, assay = "AUC", size = gs(8)) %>% heat_theme() +mytheme+heattheme 
+# 
+# 
+# F2C
+# 
+# CTG <- CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% trmcl) %>% 
+#   group_by(gene) %>% 
+#   top_n(1, avg_log2FC) %>% 
+#   arrange(cluster, desc(avg_log2FC))%>%
+#   pull(gene)
+# 
+# 
+# 
+# CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% "TRM_1_LG")
+# 
+# 
+# F2D <- ( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
+#                  features = CTG)+mytheme+heattheme+
+#            
+#            theme(text = element_text(size = 8),
+#                  axis.text.y = element_text(size = 8),
+#                  axis.line.y.left = element_line(),
+#                  axis.text.x = element_text(size = 8, angle= 90,face = "italic"),
+#                  legend.box.margin = margin(5,0,0,5,unit = 'mm'),
+#                  legend.box = "horizontal",legend.position = 'bottom',
+#                  axis.title = element_blank())+
+#            ggtitle("Cytokines and Granzymes")+
+#            
+#            scale_y_discrete(position = 'right')+
+#            scale_x_discrete(position = 'bottom')+
+#            xlab(NULL)+ylab(NULL)+
+#            viridis::scale_color_viridis(discrete = F, option ="D")+
+#            guides(
+#              color = guide_colorbar(title.position = 'top',direction = 'horizontal',
+#              ),
+#              size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom')))  %T>% print()
+# 
+# 
+# 
+# F2E <-  Feature_rast(CD4CD8,genef2d, sz = 0.2, ncol = 6,
+#                      othertheme =theme(
+#                        legend.margin = margin(0,0,0,-10, "pt"))) %T>%  print()
+# 
+# F2AB <- PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6), labels = "AUTO") 
+# F2CDE <-  PG(list(F2C, F2E), ncol = 1, rh = c(0.8, 0.4),labels = c("C", "D") )
+# F2 <- PG(list(F2AB,F2CDE), ncol = 1, rh=c(12, 16)) %T>% figsave("Fig2Test_2024.pdf", 200, 280) 
+# 
+# 
+# trmcl2 <- c(
+#   # "TEM_M",
+#   "Th17_M",
+#   "Temra_1_LG",
+#   "TRM_1_LG",
+#   # "TRM_2_LG",
+#   "TRM_3_LG"
+#   # "Temra_2_P"
+#   
+# )
+# genef21 <- c("GZMA",   "GZMK",  "IFNG", "TNF") 
+# genef22  <-  c( "CD40LG", "IL17A",  "CTLA4", "GZMA", "GZMB", "AREG", "TNF")
+# 
+# F2F5 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ) %T>% print()
+# 
+# 
+# ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ,sz =  0.2) %T>% print()
+# 
+# F2F2 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef22, colors = umap.colors, 
+#                    box = F, ncol =4, sz = 0.5, othertheme = theme(axis.text.x = element_text(angle = 70, vjust = 0))
+# )  %T>% print()
+# F2F <- PG(list(F2F5, F2F2), ncol = 1, rh = c(1,1.3))
+# F2F
+# 
+# CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% "TRM_3_LG")
+# 
+# 
+# F2 <- PG(list(F2ABC, F2D, NA, F2F), ncol = 1, labels = c(NA, "D", "E", "F"), rh = c(1, 0.35, 0.8, 1)) %T>% print() %T>% figsave("FIg2_2024.pdf",200, 270, path = figpath_ni) 
+
+
+
+
+# PG(list(F5A, F5D, NA), ncol = 3)
+# 
+# PG(list(F5A, F5C, F5D), ncol = 3  , labels = "AUTO", rw = c(1.1, 1, 1.3) ) 
+# 
+# F5F
+# 
+# F5I <-  Feature_rast(GDTlung_s, "ID", colorset = ID_cl, do.label = F, sz = 0.3, othertheme = list( NoLegend(),coord_fixed()))  %T>% print()
+# 
+# 
+# Feature_rast(GDTlung_s, "ID", colorset = ID_cl, do.label = F, sz = 0.3, othertheme = list( coord_fixed()))  %T>% print()
+# 
+# Feature_rast(CD4CD8, "ID", colorset = ID_cl, do.label = F, sz = 0.3) 
+# 
+# 
+# F5J <- ggplot(cl_comp_gd, aes(y = n, x = Cell_cluster, fill = ID, 
+#                                color = ID,
+#                                stratum = ID  )) +
+#   scale_x_discrete(expand = c(.1, .1)) +
+#   geom_stratum(alpha=0.8 ,size = 0.2)+
+#   scale_fill_manual(values = ID_cl,
+#                     labels = rep(paste0('p', c(25,27,32,45,71,73,77)),2)
+#   )+
+#   scale_color_manual(values = ID_cl)+
+#   theme_minimal() + 
+#   ylab('Cell no. of\ncluster per donor')+
+#   # xlab('cluster')+ 
+#   xlab(NULL)+
+#   ggtitle("gd T cell tissue distribution")+
+#   scale_y_continuous(labels = abs)+
+#   geom_hline(yintercept = 0,size = 0.5)+
+#   guides(fill = guide_legend(nrow = 2, title = 'LLN\n\nLung',
+#                              byrow = T, label.position = 'bottom',
+#                              override.aes = list(color = "white")),
+#          color = F )+
+#   mytheme+
+#   theme(legend.position = 'bottom', 
+#         
+#         legend.key.height  = unit(5, 'mm'), 
+#         legend.key.width   = unit(5,'mm'), 
+#         axis.text.x = element_text(size = 8, angle = 90),
+#         legend.text = element_text(size=8),
+#         axis.line = element_blank())+
+#   NULL
+# 
+# F5J
+# 
+# lgd <-  get_legend(F5J) %>% ggplotify::as.ggplot()
+# 
+# F5EFIJ <- PG(list(F5E, F5F, F5I, (F5J+NoLegend()), lgd), labels = c("E", "F", "I", "J", NA),ncol = 2, rw = c(1,1.2), rh = c(1,1,0.15)) %T>% print()  
+# 
+# Feature_rast(GDTlung_s, sz = 0.3, "AREG",
+#              labelsize = 8,
+#              noaxis = F, legendcol = 2, othertheme = coord_fixed())
+# 
+# F5G <- (Feature_rast(GDTlung_s, sz = 0.3,
+#                      labelsize = 8,
+#                      noaxis = F, legendcol = 3, othertheme = coord_fixed()
+#                      
+# )+ggtitle('gdT cells')+gglp(p = "b"))%T>% print() 
+# 
+# F5H <-  Feature_rast(GDTlung_cite, c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "IL7R.protein"), colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
+#   legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   ) %T>% print()
+# 
+# 
+# 
+# F5H15 <-  map( c("CD103.protein", "CD49a.protein", "CD45RA.protein", "CD27.protein" , "IL7R.protein"), ~ 
+#                  Feature_rast(GDTlung_cite, ., colorgrd = "grd2",     sz = 0.2,othertheme = list(theme(
+#                    legend.margin = margin(0,0,0,-10, "pt")), coord_fixed())   )             
+#                  )
+# 
+# F5H6 <-  Feature_rast(GDTlung_cite, "KLRG1.protein", colorgrd = "grd2",  ncol = 3, sz = 0.2,othertheme = list(theme(
+#   legend.margin = margin(0,0,0,-10, "pt")),
+#   scale_m("grd2", c(0,0.5, 1,1.5), c(0,1.5)),
+#   coord_fixed())   )
+# 
+# F5H15[[6]] <- F5H6
+# 
+# F5H <- PG(F5H15, ncol = 3)
+# F5H
+# 
+# PG(F5H15, ncol = 2)
+# 
+# 
+# F5GH <- PG(list(F5G, F5H), labels = c('G', 'H'), ncol = 1, rh = c(1.3,1))
+# F5EFIJGH <- PG(list(F5EFIJ,F5GH), ncol = 2, rw = c(1.6,1) ) %T>% print()
+# 
+# 
+# F5_new <- PG(list(F5AB, F5CD, F5EFIJGH), ncol = 1, rh = c(0.6,1,2)) %T>% print() %T>% figsave("Fig1_2024_new_design_1.pdf", 200, 260, path = figpath_ni)
+# 
+# F5_new
 # supplementary
 
 FS1A <-  
@@ -3853,6 +4129,15 @@ FS1B <- (DoHeatmap(pseudobuklCD4CD8,features = top5deg_CD4CD8_bulk$gene,raster =
   heat_theme() %T>% print()
 
 
+cols.use <- list(Cell_pheno = umap.colors, tissue = c("#003399", "#990000"), patient =RColorBrewer::brewer.pal(n = 7,name = "Accent")
+)
+
+ DoMultiBarHeatmap(subset(CD4CD8,downsample = 500),features = top10deg$gene,  group.by='Cell_pheno', size = gs(6),additional.group.sort.by = "tissue", angle = 20,
+                          additional.group.by = c("tissue", "patient", "CD4CD8"),
+                          cols.use =cols.use) %>% heat_theme(legend.position = "right") %T>% print()
+
+
+
 FS1D <- (DoHeatmap(pseudobuklGD,features = top5degGDT_bulk$gene,raster = T,  
                    assay = "RNA", 
                    group.colors = umap.colors,size = gs(8) ) +
@@ -3861,7 +4146,7 @@ FS1D <- (DoHeatmap(pseudobuklGD,features = top5degGDT_bulk$gene,raster = T,
 PG(list(FS1A,FS1C, FS1B, FS1D), ncol = 2, rh = c(1,4), labels = c("A", "C", "B", "D")) %T>% print() %T>% figsave("Fig_S1_2024_1.pdf", 200, 270,path = figpath_ni) 
 figpath_ni
 
-F1
+F5
 
 
 Feature_rast(CD4CD8, c( "EOMES-REG", "MAF-REG","TBX21-REG",   "RORC-REG", "RORA-REG"), colorgrd = "grd2", assay = "AUC")
@@ -3883,230 +4168,8 @@ Feature_rast(CD4CD8, facets = "CD4CD8", facetcol = 1, ,othertheme = list(theme(
   # scale_m("grd2", c(0,0.05, 0.1,0.15), c(0,0.15)),
   coord_fixed()) )
 
-# Figure 2 and S2 ---------------------------------------------------------
 
-F2A <- (Feature_rast(CD4CD8, sz = 0.3,
-                     g= "CD4CD8", do.label = F,
-                     othertheme = coord_fixed(),
-                     noaxis = F
-                     
-)+ggtitle('CD4+ and CD8+ T cell distribution')+
-  theme(legend.position = c(0.05, 00.05), legend.justification = c(0.05, 0.05))
-
-
-) %T>% print() 
-
-
-
-
-
-GMS_long <- FetchData(CD4CD8, c("CD4CD8", "Cell_pheno", names(sigtable))) %>% 
-  reshape2::melt(value.name = "score" ) %>% 
-  mutate(variable = if_else(variable =="CD8.Cytotoxictiy","Cytotoxicity",variable ) )
-
-names(sigtable)
-
-sigtable$Th1
-
-head(GMS_long)
-GMS_long$variable %>% unique()
-
-nrow(GMS_long)
-
-GMS_long %>% group_by(variable) %>% count()
-
-GMS_long %>% group_by(CD4CD8, Cell_pheno, variable) %>% count() %>% filter(n < 150) %>% ungroup() %>% 
-  distinct(CD4CD8, Cell_pheno)
-
-GMS_long  %<>% 
-  filter(!((CD4CD8 == 'CD4' &  Cell_pheno  %in% c("TRM_2_LG", "TRM_3_LG")) | (CD4CD8 == "CD8" & Cell_pheno == "Treg_LN")))
-
-GMS_long  %>% 
-  filter((CD4CD8 == 'CD4' &  Cell_pheno  %in% c("TRM_2_LG", "TRM_3_LG")) | (CD4CD8 == "CD8" & Cell_pheno == "Treg_LN"))
-
-
-F2B <- (ggplot(GMS_long %>% filter(variable %in% c( "Tissue.resident", "Tregs","Th17", "Cytotoxicity") & Cell_pheno != "unidentified_LG" ) %>% 
-         mutate(variable = factor(variable, level = c( "Tissue.resident", "Tregs", "Th17", "Cytotoxicity"))), 
-       aes(x = Cell_pheno, y = score, fill = CD4CD8))+
-  geom_violin_rast(size = 0.1) +
-    facet_wrap(~variable, ncol = 1, strip.position = "right", scales = "free_y")+
-  ylab("module score")+xlab(NULL)+
-  geom_boxplot( alpha = 0.5, size = 0.1,notch = F,
-                 outlier.alpha = 0,show.legend = FALSE)+
-    
-  fill_m()+
-    theme_minimal()+
-    mytheme+
-    # guides(fill = guide_legend(title = "type", keyheight = unit(4,"mm"), keywidth  = unit(3,"mm"), label.position = "bottom")
-    #   
-    # )+
-    NoLegend()+
-  theme(axis.text.x = element_text(size = 8 , angle = 90))
-  
-  ) %T>% print() 
-
-
-
-
-
-F2C1 <- Feature_rast(CD4CD8_cite, 
-                    c( "CD196.protein", "CD26.protein", 
-                       "CD94.protein"), 
-                    colorgrd  = "grd2",
-                    othertheme =   list(theme(
-                      legend.margin = margin(0,0,0,-10, "pt")),
-                      coord_fixed()  
-                    ),      sz = 0.2, ncol = 1) %T>%  print()
-F2C2 <- Feature_rast(CD4CD8_cite, 
-                    "KLRG1.protein" ,
-                    slot = "scale.data",
-                     colorgrd  = "grd2",
-                    othertheme =   list(theme(
-                      legend.margin = margin(0,0,0,-10, "pt")),
-                      coord_fixed()  
-                      ),      sz = 0.2, ncol = 1) %T>%  print()
-F2C <- PG(list(F2C1,F2C2), ncol = 1, rh =c(3,1))%T>%  print()
-
-  
-
-F2ABC <- PG(list(F2A, F2B, F2C), rw = c(1.4,2.5,0.5), ncol = 3, labels = "AUTO") %T>% print()
-
-
-# PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6)) %T>%  print()
-
-# F2D TFs   
-
-F2D <-  Feature_rast(CD4CD8, c("TBX21", "EOMES", "GATA3", "BATF", "ZNF683", "RORC"), sz = 0.1, ncol = 6,
-                     othertheme =   list(theme(
-                       legend.margin = margin(0,0,0,-10, "pt")),
-                       coord_fixed()
-                       
-                     ))  %T>% print()
-
-
-ClusterCompare(CD4CD8, "Temra_1_LG", "TRM_3_LG")
-
-
-trmcl <- c(
-  
-  "TEM_M",
-  "Temra_1_LG",
-  "TRM_1_LG",
-  "TRM_2_LG",
-  "TRM_3_LG"
-  # "Temra_2_P"
-  
-)
-
-
-
-Feature_rast(CD4CD8)
-
-F2D <-( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
-                                 features = rev(c(unique(top10TF_TRM$gene), "TOX", "RORC"))
-)+mytheme+heattheme+
-                           
-                           theme(text = element_text(size = 8),
-                                 axis.text.y = element_text(size = 8),
-                                 axis.line.y.left = element_line(),
-                                 axis.text.x = element_text(size = 8, angle= 90,face = "italic"),
-                                 legend.box.margin = margin(5,0,0,5,unit = 'mm'),
-                                 legend.box = "horizontal",legend.position = 'bottom',
-                                 axis.title = element_blank())+
-  # coord_flip()+
-                           scale_y_discrete(position = 'right')+
-                           scale_x_discrete(position = 'bottom')+
-                           xlab(NULL)+ylab(NULL)+
-  ggtitle("Transcription factors")+
-                           viridis::scale_color_viridis(discrete = F, option ="D")+
-                           guides(
-                             color = guide_colorbar(title.position = 'top',direction = 'horizontal',
-                             ),
-                             size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom'))+
-  NoLegend()
-)  %T>% print()
-
-
-
-F2C <-  DoHeatmap(CD4CD8 %>% subset(downsample = 500,Cell_pheno %in% trmcl), features = top5_48_reg, assay = "AUC", size = gs(8)) %>% heat_theme() +mytheme+heattheme 
-
-
-F2C
-
-CTG <- CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% trmcl) %>% 
-  group_by(gene) %>% 
-  top_n(1, avg_log2FC) %>% 
-  arrange(cluster, desc(avg_log2FC))%>%
-pull(gene)
-
-
-
-CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% "TRM_1_LG")
-
-
-F2D <- ( DotPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl),dot.scale = 3.5,
-          features = CTG)+mytheme+heattheme+
-    
-    theme(text = element_text(size = 8),
-          axis.text.y = element_text(size = 8),
-          axis.line.y.left = element_line(),
-          axis.text.x = element_text(size = 8, angle= 90,face = "italic"),
-          legend.box.margin = margin(5,0,0,5,unit = 'mm'),
-          legend.box = "horizontal",legend.position = 'bottom',
-          axis.title = element_blank())+
-      ggtitle("Cytokines and Granzymes")+
-      
-    scale_y_discrete(position = 'right')+
-    scale_x_discrete(position = 'bottom')+
-    xlab(NULL)+ylab(NULL)+
-    viridis::scale_color_viridis(discrete = F, option ="D")+
-    guides(
-      color = guide_colorbar(title.position = 'top',direction = 'horizontal',
-      ),
-      size = guide_legend(title.position = 'top',direction = 'horizontal',label.position = 'bottom')))  %T>% print()
-
-
-
-F2E <-  Feature_rast(CD4CD8,genef2d, sz = 0.2, ncol = 6,
-                     othertheme =theme(
-                       legend.margin = margin(0,0,0,-10, "pt"))) %T>%  print()
-
-F2AB <- PG(list(F2A, F2B), ncol = 2, rw =c(1, 0.6), labels = "AUTO") 
-F2CDE <-  PG(list(F2C, F2E), ncol = 1, rh = c(0.8, 0.4),labels = c("C", "D") )
-F2 <- PG(list(F2AB,F2CDE), ncol = 1, rh=c(12, 16)) %T>% figsave("Fig2Test_2024.pdf", 200, 280) 
-
-
-trmcl2 <- c(
-  "TEM_M",
-  "Th17_M",
-  "Temra_1_LG",
-  "TRM_1_LG",
-  "TRM_2_LG",
-  "TRM_3_LG"
-  # "Temra_2_P"
-  
-)
- genef21 <- c("GZMA",   "GZMK",  "IFNG", "TNF") 
-genef22  <-  c( "CD40LG", "IL17A", "XCL1", "CSF1")
-
-F2F1 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ) %T>% print()
-
-
-ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef21, colors = umap.colors, box = F, ncol = 4,othertheme = theme(axis.text.x = element_blank()) ,sz =  0.2) %T>% print()
-
-F2F2 <- ViolinPlot(CD4CD8 %>% subset(Cell_pheno %in% trmcl2), genef22, colors = umap.colors, 
-                   box = F, ncol =4, sz = 0.2, othertheme = theme(axis.text.x = element_text(angle = 70, vjust = 0))
-                   )  %T>% print()
-F2F <- PG(list(F2F1, F2F2), ncol = 1, rh = c(1,1.3))
-F2F
-
-CD4CD8_DEGs %>%  filter(gene %in% Cytlist & cluster %in% "TRM_3_LG")
-
-
-F2 <- PG(list(F2ABC, F2D, NA, F2F), ncol = 1, labels = c(NA, "D", "E", "F"), rh = c(1, 0.35, 0.8, 1)) %T>% print() %T>% figsave("FIg2_2024.pdf",200, 270, path = figpath_ni) 
-
-
-# Fig3 ABT TCR ------------------------------------------------------------
+# Fig6 ABT TCR ------------------------------------------------------------
 
 Feature_rast(CD4CD8, c("ident", "CD4CD8"),
              othertheme =  list( 
@@ -4301,10 +4364,10 @@ CD4CD8@meta.data %>% dplyr::filter(CD4CD8 == "CD8" & !is.na(cdr3_TRB)) %>%  coun
 
 
 
-Feature_rast(GDTlung_s, c("GATA3", "EOMES", "TNFRSF18", "AREG", "CSF2", "GZMA"),
+Feature_rast(GDTlung_s, c("GATA3", "EOMES", "TNFRSF58", "AREG", "CSF2", "GZMA"),
               ncol = 3, sz = 0.4)
 
-Feature_rast(CD4CD8, c("GATA3", "EOMES", "TNFRSF18", "AREG", "CSF2", "GZMA"), 
+Feature_rast(CD4CD8, c("GATA3", "EOMES", "TNFRSF58", "AREG", "CSF2", "GZMA"), 
              ncol = 3, sz = 0.4)
 
 GDTlung_s@meta.data %>% mutate(JC = paste0(j_gene_TRG, c_gene_TRG)) %>% 
