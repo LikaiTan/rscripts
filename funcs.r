@@ -15,6 +15,9 @@ library(RColorBrewer)
 
 
 
+# mytheme -----------------------------------------------------------------
+
+
 
 mytheme <- theme(plot.title = element_text(size = 6 , face = 'plain'),
                  plot.subtitle = element_text( face = 'plain',size = 6),
@@ -541,28 +544,33 @@ GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
 #' function to produce entrezlist compareing two seurat cluster
 #' entrezlist_generator()
 
-entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db'),rm = "^MT|^RP") {
+entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db'),rm = "^MT|^RP", sort = "avg_log2FC") {
   logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2,
                            test.use = 'bimod',logfc.threshold = 0, 
-                           only.pos = F,  min.pct = 0.1) %>%
-    tibble::rownames_to_column('SYMBOL') %>% dplyr::arrange(desc(avg_log2FC)) %>%
+                           only.pos = F,  min.pct = 0.1) %>% mutate(sig = avg_log2FC*-log10(p_val_adj)) %>% 
+    tibble::rownames_to_column('SYMBOL') %>% 
+    # dplyr::arrange(desc(avg_log2FC)) %>%
     dplyr:: filter(!grepl(rm, SYMBOL) )
   logfclist <- clusterProfiler::bitr(logfclist$SYMBOL, fromType="SYMBOL",
                     toType="ENTREZID", OrgDb=OrgDB) %>%
     right_join(logfclist, by = 'SYMBOL')
-  entrezidlist <- logfclist$avg_log2FC
+  entrezidlist <- logfclist[[sort]]
   names(entrezidlist) <- as.character(logfclist$ENTREZID)
   return(sort(entrezidlist, decreasing = T))
 }
 
 
-Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP") {
+Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP",sort = "avg_log2FC") {
   logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2,
                            test.use = 'bimod',logfc.threshold = 0, 
                            only.pos = F,  min.pct = 0.1) %>%
-    tibble::rownames_to_column('SYMBOL') %>% dplyr::arrange(desc(avg_log2FC)) %>%
+    tibble::rownames_to_column('SYMBOL') %>% 
+    mutate( # Replace p_val_adj = 0 with the smallest positive double to avoid -log10(0) = Inf
+      p_val_adj = ifelse(p_val_adj == 0, .Machine$double.xmin, p_val_adj),
+      sig = avg_log2FC * -log10(p_val_adj)) %>% 
+    # dplyr::arrange(desc(avg_log2FC)) %>%
     dplyr:: filter(!grepl(rm, SYMBOL) )
-  genelist <- logfclist$avg_log2FC
+  genelist <- logfclist[[sort]]
   names(genelist) <- as.character(logfclist$SYMBOL)
   return(sort(genelist, decreasing = T))
 }
@@ -590,7 +598,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 6,
                        assay = DefaultAssay(data),slot = 'data',
                        labels = NULL, labelsize =6, labelface='plain',
-                       mythe =F, titleface = 'italic'){
+                       mythe =T, titleface = 'italic'){
   if (length(g) == 1) {
     fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,
                    split.by = facet, assay = assay, slot = slot)
@@ -607,13 +615,13 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                     ( if (isTRUE(mythe)) {
                       mytheme
                     })+
-     scale_fill_manual(values = alpha(colors, alpha_fill))+
-      scale_color_manual(values = alpha(colors, alpha_point))+
-      theme(legend.position = 'none',
-            axis.text.x = element_text(angle = x.angle, size = size),
-            axis.text.y = element_text(size = size),
-            axis.line = element_blank(),
-            axis.title.y = element_text(face = titleface,size = size))+
+                    scale_fill_manual(values = alpha(colors, alpha_fill))+
+                    scale_color_manual(values = alpha(colors, alpha_point))+
+                    theme(legend.position = 'none',
+                          axis.text.x = element_text(angle = x.angle, size = size),
+                          axis.text.y = element_text(size = size),
+                          axis.line = element_blank(),
+                          axis.title.y = element_text(face = titleface,size = size))+
                     othertheme
   } else {
     gp <- lapply(g, function(i) {

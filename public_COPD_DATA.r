@@ -31,6 +31,10 @@ setwd("/home/big/tanlikai/Lung/")
 
 COPD_pub <- readRDS("public/pdd_copd_public_2023-09-18_revised.RDS")
 
+
+
+
+
 saveRDS(COPD_pub, "public/pdd_copd_public_2023-09-18_revised.RDS")
 
 # COPD_pub <- UpdateSeuratObject(COPD_pub)
@@ -65,6 +69,7 @@ Feature_rast(COPD_pub, c("qc.nCount.Outlier", "qc.mit.Outlier", "doublet_scruble
 
 ViolinPlot(COPD_pub, "doublet_scrublet", group.by = "orig.ident")
 
+ViolinPlot(COPD_pub, "IL32", group.by = "disease")
 
 
 
@@ -388,7 +393,7 @@ library(patchwork)
 
 COPD_gdTcells@meta.data$disease %>% unique
 COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","moking-related ILD",
-                                                                             "GOLD I/II") ~ "COPD and ILD",  disease %in% c("Healthy", "Donor") ~ "Control" ))
+                                                                             "GOLD I/II") ~ "COPD and Emphysema",  disease %in% c("Healthy", "Donor") ~ "Control" ))
 
 Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl")
 
@@ -403,7 +408,7 @@ copdratio_donor$SUM %>%  unique()
 ggplot(copdratio_donor %>%  filter(SUM > 20), aes(x = COPD_vs_Ctrl, y = percent)) + geom_point()+facet_wrap(~gd_cluster )+ theme(axis.text.x = element_text(angle = 90))
 
 
-COPD_gdTcells_ab <- subset(COPD_gdTcells, COPD_vs_Ctrl %in% c('COPD and ILD', "Control") )
+COPD_gdTcells_ab <- subset(COPD_gdTcells, COPD_vs_Ctrl %in% c('COPD and Emphysema', "Control") )
 
 Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", colorset =c( "cyan", "blue"))
 
@@ -441,8 +446,8 @@ ggplot(da_results, aes(logFC, -log10(SpatialFDR))) +
 
 da_results <- annotateNhoods(COPD_gdTcells_ab_milo, da_results, coldata_col = "gd_cluster")
 head(da_results)
-da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.1, "Mixed", da_results$gd_cluster)
-plotDAbeeswarm(da_results, group.by = "gd_cluster", alpha = 1)+mytheme
+da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.5, "Mixed", da_results$gd_cluster)
+plotDAbeeswarm(da_results, group.by = "gd_cluster",alpha = 0.5)+mytheme
 
 
 ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
@@ -557,7 +562,9 @@ Top20_COPD_TRM_TEMRA_TYPE3 <-AllDEGs_COPD_TRM_TEMRA_TYPE3 %>% group_by(cluster) 
 DoHeatmap(COPD_gdTcells, Top20_COPD_TRM_TEMRA_TYPE3$gene) %>% heat_theme()
 
 Dotfeatures = unique(Top20_COPD_TRM_TEMRA_TYPE3$gene) %>% 
-  str_replace("MMP25", "AREG")
+  str_replace("MMP25", "AREG") %>% 
+  str_replace("MLC1", "EOMES")%>% 
+  str_replace("TMEM200A", "GATA3")
 
 DotPlot(COPD_gdTcells,assay = 'RNA',dot.scale = 3.5,
                               features =Dotfeatures)+mytheme+
@@ -585,6 +592,21 @@ TFs_gd <- intersect(TFs, rownames(COPD_gdTcells))
  
  
 ClusterCompare(COPD_gdTcells, 'gdTRM_1', 'gdTemra_1', features = TFs_gd)
+
+
+
+# protein -----------------------------------------------------------------
+
+citeproteins <-  COPD_gdTcells@assays$Protein@counts %>%  rownames()
+
+grep("CD39", citeproteins, value = T)
+
+
+Feature_rast(COPD_gdTcells, c("CD357-or-GITR-prot"  ) , assay = "Protein" ,colorgrd = "grd2", ncol = 3, 
+             othertheme = coord_fixed())
+
+
+ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTemra_1", assay = "Protein")
 # GSEA --------------------------------------------------------------------
 
 
@@ -758,11 +780,12 @@ ClusterCompare(COPD_gdTcells, assay = "Protein", id1 = "gdTRM_1", id2 = "gdTemra
 ClusterCompare(COPD_gdTcells, assay = "Protein", id1 = "Type1_Vd2", id2 = "Type3_Vd2", test = "wilcox")
 
 
-F6D <-  Feature_rast(COPD_gdTcells, c("CD45RA-prot", "CD27-prot", 
-                                      "TCRVgamma9-prot" ,"TCRVdelta2-prot" ,
+F6D <-  Feature_rast(COPD_gdTcells, c(   "CD103-or-IntegrinalphaE-prot"  , "CD49a-prot",
+                                      "CD45RA-prot", "CD45RO-prot",    "CD27-prot",  
+                                    "TCRVdelta2-prot" ,
                                       
-                                "CD103-or-IntegrinalphaE-prot"  , "KLRG1-or-MAFA-prot", 
-                              "CD26-prot" ,"CD16-prot" 
+                             "KLRG1-or-MAFA-prot",  
+                              "CD26-prot" ,"CD16-prot" , "CD57Recombinant-prot"
                               ) , assay = "Protein" , 
              colorgrd = "grd2", ncol = 2, sz = 0.4,
              othertheme = list(coord_fixed(),theme(
@@ -812,47 +835,55 @@ F6F <- Feature_rast(COPD_gdTcells, c("STAT1", "NKG7", "EOMES", "NR3C1", "ENTPD1"
 
 Feature_rast(COPD_gdTcells, c("IRF2", "IRF4", "BATF"))
 
-Feature_density(COPD_gdTcells, c("STAT1", "NKG7", "EOMES", "NR3C1", "CSF1", "GATA3","RORC","CCR6", "DPP4"  ), ncol = 3, 
+F6F_des <- Feature_density(COPD_gdTcells, c( "EOMES", "GATA3","RORC"), ncol = 3, 
                 # sz = 0.4,
              othertheme = list(coord_fixed(),theme(
                plot.margin = margin(0,0,-2,-3, "pt"),
-               legend.margin = margin(0,0,0,-10, "pt"))  )  ) %T>% print()
+               legend.position =  "none"  )  )  ) %T>% print()
 
 
+
+
+library(ggpubr)
 
 GM_DM <- ViolinPlot(COPD_gdTcells,"GM_D", 
-                    othertheme =   list(theme(axis.text.x = element_blank(),
-                                              plot.title = element_text(size = 8)),
+                    othertheme =   list(theme(axis.text.x =element_text(angle = 90, size = 8,hjust = 1, vjust = 0.5),
+                                              plot.title = element_text(size = 8)), 
+                                        stat_compare_means(method = "kruskal.test", size = gs(6) ),
+                              
                                         ylab(NULL), ggtitle("Vd2 Type3 immunity")) ,colors = umap.colors, box = T)%T>% print()
 
-GM_FM <- ViolinPlot(COPD_gdTcells,"GM_F", 
-                    othertheme =   list(theme(axis.text.x = element_blank(),
-                                              plot.title = element_text(size = 8)),
-                                        ylab(NULL), ggtitle("CTL response (Vd2)")) ,colors = umap.colors, box = T)%T>% print()
+
+
+
+# GM_FM <- ViolinPlot(COPD_gdTcells,"GM_F", 
+#                     othertheme =   list(theme(axis.text.x = element_blank(),stat_compare_means(method = "kruskal.test", size = gs(6)),
+#                                               plot.title = element_text(size = 6)),
+#                                         ylab(NULL), ggtitle("CTL response (Vd2)")) ,colors = umap.colors, box = T)%T>% print()
 
 
 
 
 GM_GM <-  ViolinPlot(COPD_gdTcells,"GM_G", 
                                othertheme =   list(theme(axis.text.x = element_text(angle = 90, size = 8,hjust = 1, vjust = 0.5),
-                                                         plot.title = element_text(size = 8)),
-                                                   ylab(NULL), ggtitle("CTL response (Vd1)")) ,colors = umap.colors, box = T)%T>% print()
+                                                         plot.title = element_text(size = 6)),stat_compare_means(method = "kruskal.test", size = gs(6)),
+                                                   ylab(NULL), ggtitle("CTL response ")) ,colors = umap.colors, box = T)%T>% print()
 
 
 TregM <-  ViolinPlot(COPD_gdTcells,"Tregs", 
            othertheme =   list(theme(axis.text.x = element_text(angle = 90, size = 8,hjust = 1, vjust = 0.5),
-                                     plot.title = element_text(size = 8)),
+                                     plot.title = element_text(size = 6)),stat_compare_means(method = "kruskal.test", size = gs(6)),
                                ylab(NULL), ggtitle("Treg module")) ,colors = umap.colors, box = T)%T>% print()
 
 
 
 
-F6G <-  PG(list(GM_DM, GM_FM, GM_GM, TregM), ncol = 2, labels = "Gene Modular Score",label_fontface = "plain",label_x = 0.8,
-           rh = c(1, 1.2)) %T>% print()
+F6G <-  PG(list(GM_DM,  GM_GM, TregM), ncol = 3, labels = "Gene Modular Score",label_fontface = "plain",label_x = 0.8
+         ) %T>% print()
 
 
   F6FG <- 
-PG(list(F6F, F6G), ncol = 2, rw = c(3,2), labels = c("F", "G")) %T>% print()
+PG(list(F6F_des, F6G), ncol = 2, rw = c(1,1.2), labels = c("F", "G")) %T>% print()
 
 
 
@@ -870,10 +901,9 @@ gseatrm <-  GSEA_multipplot(GSEA_c0_c1, c("GOBP_INNATE_IMMUNE_RESPONSE",
 
 F6I <-   PG(list(gseatrm, NA), ncol =2, rw = c(1, 1), labels = c("I", NA)) %T>% print()
  
-F6E_I <- PG(list(F6E, F6FG, F6I), ncol = 1, labels = "E", rh = c(1.2,2,1.2)) %T>% print()
+F6E_I <- PG(list(F6E, F6FG, F6I), ncol = 1, labels = "E", rh = c(1.2,1,1.2)) %T>% print()
 
-newF6 <-  PG(list(F6A_D, F6E_I), ncol = 1, rh = c(1,1.5)) %T>%  
-  print() %T>% figsave( path = figpath_ni, "Fig6_PublicCOPD_2024_new.pdf", 200, 270) 
+newF6 <-  PG(list(F6A_D, F6E_I), ncol = 1, rh = c(1,1.3)) %T>% figsave( path = figpath_ni, "Fig4_PublicCOPD_2025_new.pdf", 200, 250) 
 
 proteinlist
 

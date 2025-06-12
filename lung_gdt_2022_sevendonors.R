@@ -694,14 +694,15 @@ plot_density(GDTlung_s, gc_name)
 
 ViolinPlot(GDTlung_s, gc_name, colors = umap.colors, box = T)
 gc_name[9] <- 'Treg_module'
-gc_name
-
+gc_name[10] <- "Tissue.resident"
+gc_name[11] <- "CD8.Cytotoxictiy"
+GDTlung_s$Tissue.resident
 GMS  <- GDTlung_s@meta.data[,c(gc_name)] %>% as.data.frame() %>% t()
 scaleGM <- scale(t(GDTlung_s@meta.data[,c(gc_name)]))
 scaleGMassay <- CreateAssayObject(data = scaleGM)
 GDTlung_s@assays$GM <- scaleGMassay
 gms <- paste0('GM-', LETTERS[1:8])
-gcanno <- as.vector(c(' Naive or immature T cell',
+gcanno <- as.vector(c(' Naive T cell',
                       "Innate T cell differentiation",
                       'Proliferating',
                       "Type-3 immunity",
@@ -710,7 +711,9 @@ gcanno <- as.vector(c(' Naive or immature T cell',
                       "CTL response (adaptive)",
                       
                       "Acute activation",
-                       'Treg core module'))
+                       'Regulatory',
+                      "Tissue resident",
+                      "Cytotoxictiy"))
 
 
 c(1,4,7,9) %>% map(~
@@ -718,14 +721,19 @@ c(1,4,7,9) %>% map(~
                        ggtitle(gcanno[.x]) 
 ) %>% PG(ncol = 4) %T>% figsave('GM_score.pdf', 200, 150)
 
-
-c(4,7,9) %>% map(~
+gc_name
+c(1,10,11,9) %>% map(~
                    ViolinPlot(GDTlung_s, gc_name[.x],ylabtext = "score",
-                                x.angle = 90, mythe = F, size = 10,
+                                x.angle = 90, mythe = F, size = 10,, othertheme =list(theme(plot.title = element_text(size = 8)), stat_compare_means(method = "kruskal.test", size = gs(6))) ,
                               colors =  umap.colors, box = T)+
-                   ggtitle(gcanno[.x])+theme(plot.title = element_text(size = 14))
-) %>% PG(ncol = 3) 
+                   ggtitle(gcanno[.x])
+) %>% PG(ncol = 4) 
 
+
+
+ViolinPlot(GDTlung_s, "GM_C",ylabtext = "score",
+           x.angle = 90, mythe = F, size = 10,, othertheme =list(theme(plot.title = element_text(size = 8)), stat_compare_means(method = "anova", size = gs(6))) ,
+           colors =  umap.colors, box = T)
 
 ViolinPlot(GDTlung_s, 'GM_D', box = T, colors = umap.colors, mythe = F,x.angle = 90)+ggtitle('Type-3 module')
 
@@ -761,7 +769,7 @@ colnames(GDTlung_s@meta.data) %<>% str_replace("(?<=\\w)1$", '')
 GDTlung_s@meta.data
 
 GDTlung_s$Tissue.resident <- GDTlung_s$TRM1
-ViolinPlot(GDTlung_s, names(sigtable)[c(1:9, 14,15)], colors = umap.colors, box = T,x.angle = 315, ncol = 4)
+ViolinPlot(GDTlung_s, names(sigtable)[c(1:9, 14,15)], colors = umap.colors, box = T,x.angle = 315,othertheme =list(theme(plot.title = element_text(size = 8)), stat_compare_means(method = "kruskal.test", size = gs(6), )) , ncol = 4)
 
 # CITESEQ analysis --------------------------------------------------------
 
@@ -894,7 +902,7 @@ Feature_rast(GDTlung_cite ,
 
 
 (Feature_rast(GDTlung_cite,
-              g = 'T_pheno',
+              g = 'tissue',
               #w facets = c('CD4CD8', 'tissue'),
               d1 ='CD45RA.protein', d2 =  'CD27.protein',
               colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 6) %>% rev(),
@@ -931,19 +939,19 @@ ClusterCompare(GDTlung_s %>%  subset(Cell_cluster == "gd_TRM_LG5"), group.by = '
 
 
 bc_naive <- colnames(   
-  subset(GDTlung_cite,CD27.protein > 0.6 &  CD45RA.protein > 2.5 )
+  subset(GDTlung_cite,CD27.protein > 0.3 &  CD45RA.protein > 2.5 )
 )
 
 bc_cm <- colnames(   
-  subset(GDTlung_cite, CD27.protein > 0.6 &  CD45RA.protein <= 2.5 )
+  subset(GDTlung_cite, CD27.protein > 0.3 &  CD45RA.protein <= 2.5 )
 )
 
 bc_em <- colnames(   
-  subset(GDTlung_cite,CD27.protein <= 0.6 &  CD45RA.protein <= 2.5 )
+  subset(GDTlung_cite,CD27.protein <= 0.3 &  CD45RA.protein <= 2.5 )
 )
 
 bc_tmra <- colnames(   
-  subset(GDTlung_cite,CD27.protein <= 0.6 &  CD45RA.protein > 2.5 )
+  subset(GDTlung_cite,CD27.protein <= 0.3 &  CD45RA.protein > 2.5 )
 )
 
 
@@ -961,7 +969,7 @@ Feature_rast(GDTlung_cite, c("T_pheno", "ident"))
 
 Feature_rast(GDTlung_cite,
              g = 'T_pheno',
-             facets = c('patient'),
+             # facets = c('patient'),
              d1 ='CD45RA.protein', d2 =  'CD27.protein',
              colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 4) %>% rev(),
              
@@ -976,17 +984,18 @@ Feature_rast(GDTlung_cite, c("T_pheno"), facets = "tissue")
 
 
 
+
 (Feature_rast(GDTlung_cite,
-              # g = 'pheno',
-              facets = c( 'tissue'),
+              g = 'pheno',
+              # g = c( 'tissue'),
               d1 ='CD49a.protein', d2 =  'CD103.protein',
               # colorset = RColorBrewer::brewer.pal(name = 'RdYlGn', n = 6) %>% rev(),
               
               # slot = 'scale.data',
               noaxis = F, assay = 'CITE',
               axis.number = T)+
-    geom_hline(yintercept = 0.5, linewidth = 0.2)+
-    geom_vline(xintercept = 1,linewidth = 0.2)
+    geom_hline(yintercept = 1, linewidth = 0.2)+
+    geom_vline(xintercept = 2.5,linewidth = 0.2)
 )
 
 
@@ -1340,13 +1349,13 @@ Feature_rast(GDTlung_s, 'v_gene_TRD')
 # GDTlung_s@meta.data %<>% `colnames<-`(str_remove(colnames(GDTlung_s@meta.data), '.y')) %>%
 #   select(!ends_with('.x')) 
 # mapped TCR
-TRDmapp <- GDTlung_s@meta.data %>% count(ID, v_gene_TRD) %>%  group_by(ID)  %>%
+TRDmapp <- GDTlung_s@meta.data %>% count(patient, v_gene_TRD) %>%  group_by(patient)  %>%
   mutate(percent = n/sum(n)*100) 
-TRGmapp <- GDTlung_s@meta.data %>% count(ID,v_gene_TRG) %>%  group_by(ID)  %>%
+TRGmapp <- GDTlung_s@meta.data %>% count(patient,v_gene_TRG) %>%  group_by(patient)  %>%
   mutate(percent = n/sum(n)*100) 
 
 
-pairedmapp <-GDTlung_s@meta.data %>% count(ID,paired_sp) %>%  group_by(ID)  %>%
+pairedmapp <-GDTlung_s@meta.data %>% count(patient,paired_sp) %>%  group_by(patient)  %>%
   mutate(percent = n/sum(n)*100) 
 
 
@@ -1357,7 +1366,7 @@ GDTlung_s@meta.data %<>% mutate(TCR_summary = case_when(!is.na(paired) ~ 'paired
 
 
 mappedTCR <- map2(list(TRDmapp, TRGmapp, pairedmapp), list('v_gene_TRD','v_gene_TRG', 'paired_sp'),~
-                    ggplot(.x, aes_string('ID', y = "percent", color = .y, fill = .y))+
+                    ggplot(.x, aes_string('patient', y = "percent", color = .y, fill = .y))+
                     geom_bar(stat = 'identity',  width = 0.5,position = position_stack(reverse = T))+
                     color_m()+
                     fill_m()+
@@ -1371,7 +1380,7 @@ mappedTCR <- map2(list(TRDmapp, TRGmapp, pairedmapp), list('v_gene_TRD','v_gene_
                     theme(axis.text.x = element_text(angle = 270))+
                     gglp('b')
                   
-) %>% PG(nrow =1, labels = 'AUTO')
+) %>% PG(nrow =1)
 mappedTCR
 # ViolinPlot(subset(GDTlung, length_TRD >0 & patient == '#3'),'length_TRD')
 
@@ -1460,10 +1469,10 @@ GDTlung_s@meta.data %<>%
 
 GDTlung_s@meta.data %<>% mutate(clonal_expansion_TCRGD =case_when(cdr3_paired_freq == 1 ~ 'monoclonal',
                                                             nr(cdr3_paired_freq, 2,4)~'low (2~4)',
-                                                            nr(cdr3_paired_freq, 5,9)~'moderate (5~9)',
+                                                            nr(cdr3_paired_freq, 5,20)~'moderate (5~20)',
                                                             
-                                                            cdr3_paired_freq >9 ~ 'high (>9)' ),
-                                clonal_expansion = factor(clonal_expansion, levels = c('high (>9)', 'moderate (5~9)',
+                                                            cdr3_paired_freq >20 ~ 'high (>20)' ),
+                                clonal_expansion = factor(clonal_expansion, levels = c('high (>20)', 'moderate (5~20)',
                                                                                        'low (2~4)', 'monoclonal'))   )
 
 Feature_rast(GDTlung_s, "clonal_expansion", facets = "patient", do.label = F,
@@ -1472,7 +1481,7 @@ Feature_rast(GDTlung_s, "clonal_expansion", facets = "patient", do.label = F,
 
 Feature_rast(GDTlung_s, c('SELL', 'CD27', 'CD28', 'IL7R', 'TCF7'))
 
-Feature_rast(GDTlung_s, "clonal_expansion",  do.label = F,
+Feature_rast(GDTlung_s, "clonal_expansion_TCRGD",  do.label = F,
              colorset =  c('#DC143C','#9400D3', '#1E90FF', '#FAFAD2'), navalue = "transparent")
 
 
@@ -1506,7 +1515,7 @@ Top5TRD <- GDTlung_s@meta.data %>% filter( !is.na(cdr3_TRD) ) %>%
   group_by(patient) %>%  dplyr::slice(1:5) %>% filter(n>=5) %>%
   dplyr::mutate(Top5TRD = paste0(patient, ' ',v_gene_TRD," ",cdr3_TRD,' ',  n)) %>% 
   arrange(patient,desc(n)) %>%
-  select(patient, cdr3_TRD, Top5TRD) %>%
+  dplyr::select(patient, cdr3_TRD, Top5TRD) %>%
   ungroup()
 
 
@@ -1517,7 +1526,7 @@ Top5TRD_Pulm <- GDTlung_s@meta.data %>% filter( !is.na(cdr3_TRD) & tissue == 'Pu
   group_by(patient) %>%  dplyr::slice(1:5) %>% filter(n>=5) %>%
   dplyr::mutate(Top5TRD_Pulm = paste0(patient, ' ',v_gene_TRD," ",cdr3_TRD,' ',  n)) %>% 
   arrange(patient,desc(n)) %>%
-  select(patient, cdr3_TRD, Top5TRD_Pulm) %>%
+  dplyr::select(patient, cdr3_TRD, Top5TRD_Pulm) %>%
   ungroup()
 
 
@@ -1529,7 +1538,7 @@ Top5TRD_LN <- GDTlung_s@meta.data %>% filter( !is.na(cdr3_TRD) & tissue == 'LN')
   group_by(patient) %>%  dplyr::slice(1:5) %>% filter(n>=5) %>%
   dplyr::mutate(Top5TRD_LN = paste0(patient, ' ',v_gene_TRD," ",cdr3_TRD,' ',  n)) %>% 
   arrange(patient,desc(n)) %>%
-  select(patient, cdr3_TRD, Top5TRD_LN) %>%
+  dplyr::select(patient, cdr3_TRD, Top5TRD_LN) %>%
   ungroup()
 
 
@@ -1576,13 +1585,21 @@ top10trdcl <-
     '#ffffcc'
   )
 
-luLN_expanded<-Feature_rast(GDTlung_s, "Top5TRD_LN", do.label = F, facets ='patient')+
+luLN_expanded<-Feature_rast(GDTlung_s, "Top5TRD_Pulm", do.label = F, facets ='patient')+
   scale_color_manual(values = c(  
-    top10trdcl[1:(length(unique(GDTlung_s$Top5TRD_LN))-2)],
+    top10trdcl[1:(length(unique(GDTlung_s$Top5TRD_Pulm))-2)],
     'mapped TCR' = alpha('yellow',0.5)), 
     na.value =alpha('lightgrey',0.5) )+
-  ggtitle("Most Expanded TRD in luLN")
+  ggtitle("Most Expanded TRD in Lung")
 
+Feature_rast(GDTlung_s, "Top5TRD_Pulm", do.label = F, facets ='patient')+
+  scale_color_manual(values = c(  
+    top10trdcl[1:(length(unique(GDTlung_s$Top5TRD_Pulm))-2)],
+    'mapped TCR' = alpha('yellow',0.5)), 
+    na.value =alpha('lightgrey',0.5) )+
+  ggtitle("Most Expanded TRD in Lung")
+
+Feature_rast(GDTlung_s, "Top5TRD_Pulm", do.label = F, facets ='patient', colorset = "gg")
 
 
 
@@ -1622,7 +1639,7 @@ GDTTRDfreq
 gini_TRD <-  GDTTRDfreq %>% 
   dplyr::group_by( patient, Cell_cluster) %>%
   summarise(Gini_Index = gini(n), sum = sum(n))  %>%
-  mutate(Gini_Index = replace(Gini_Index, sum < 20, NA))%>% 
+  mutate(Gini_Index = replace(Gini_Index, sum < 10, NA))%>% 
   ungroup() %>% 
   tidyr::complete(patient, Cell_cluster , 
                   fill = list(Gini_Index = NA, sum = NA))
@@ -1634,11 +1651,11 @@ gini_TRD <-  GDTTRDfreq %>%
 
 
 
-giniindex_TRD <- ggplot(gini_TRD, aes(x = Cell_cluster , y = Gini_Index, 
+giniindex_TRD <- (ggplot(gini_TRD, aes(x = Cell_cluster , y = Gini_Index, 
                                            color = patient, group= Cell_cluster))+
   geom_boxplot()+geom_point()+
   color_m(color = set_sample(umap.colors, s = 22))+theme_minimal()  +
-  theme(axis.text.x = element_text(angle = 90))
+  theme(axis.text.x = element_text(angle = 90)) ) %T>% print()
 
 
 
@@ -2359,15 +2376,19 @@ Feature_rast(Reggd, "GATA3_REG", colorgrd = "grd2",  ncol = 3, sz = 0.2,otherthe
 
 GDTlung_s <- ScaleData(GDTlung_s, assay = 'AUC')
 
-DE_Reglon <- FindAllMarkers(GDTlung_s, only.pos = T, assay = "AUC",min.pct = 0.25, test.use =  "wilcox", slot = "scale.data")
+DE_Reglon <- FindAllMarkers(GDTlung_s, only.pos = T, assay = "AUC",min.pct = 0.7, test.use =  "wilcox", slot = "scale.data")
 
-DE_Reglon %>% filter(gene == 'RORC-REG')
-
-
-top5_reg <-  DE_Reglon %>% group_by(cluster) %>% top_n(5, avg_diff) %>%  pull(gene)
+DE_Reglon %>% filter(gene == 'EOMES-REG')
 
 
-DoHeatmap(GDTlung_s, features = top5_reg, assay = "AUC") %>% heat_theme()
+
+
+top5_reg <-  DE_Reglon %>% group_by(cluster) %>% top_n(15, avg_log2FC ) 
+DE_Reglon %>% group_by(cluster) %>% top_n(15, avg_log2FC )  %>% filter(cluster == 'gd_TRM_LG6')
+top5_reg %>% filter(gene == 'EOMES-REG')
+top5_reg %>% filter(cluster == 'gd_TRM_LG6')
+
+DoHeatmap(GDTlung_s, features = top5_reg$gene, assay = "AUC") %>% heat_theme()
 
 ClusterCompare(GDTlung_s, id1 = "gd_TRM_LG6", id2 = "gd_TEMRA_LG3", 
                assay = "AUC",  log2fc = 0.15)
@@ -2466,8 +2487,11 @@ ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "REG", log2fc = 0.01)
 library(clusterProfiler)
 library(msigdbr)
 library(org.Hs.eg.db)
+
+
+# Reference  datasets
 ALL_msigdb_G  <- rbind(
-  # c7
+  # c7 Immunology 
   msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
   # hallmarker
   msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
@@ -2476,16 +2500,27 @@ ALL_msigdb_G  <- rbind(
   # GOBP
   msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
   dplyr::select(gs_name, gene_symbol)
+ALL_msigdb_G
 
+ALL_msigdb_G$gs_name %>% unique()   %>%  length()
 
-GO_ref <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>%   dplyr::select(gs_name, gene_symbol)
-
-Hallmarkers_ref <- msigdbr(species = "Homo sapiens", category = "H") %>%   dplyr::select(gs_name, gene_symbol)
+# 
+# 
+# 
+# GO_ref <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP') %>%   dplyr::select(gs_name, gene_symbol)
+# 
+# Hallmarkers_ref <- msigdbr(species = "Homo sapiens", category = "H") %>%   dplyr::select(gs_name, gene_symbol)
 
 
 TRMvsTEMRA
 
-TRMvsTEMRA <- Genelist_generator(GDTlung_s, 'gd_TRM_LG6', 'gd_TEMRA_LG3')
+TRMvsTEMRA <- Genelist_generator(GDTlung_s, 'gd_TRM_LG6', 'gd_\TEMRA_LG3', sort = "avg_log2FC")
+TRMvsTEMRA_2 <- Genelist_generator(GDTlung_s, 'gd_TRM_LG6', 'gd_TEMRA_LG3', sort = "sig")
+
+TRMvsTEMRA
+ClusterCompare(GDTlung_s, 'gd_TRM_LG6', 'gd_TEMRA_LG3')
+
+TRMvsTEMRA_2 
 
 GSEA_TRMvsTEMRA_allref<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=ALL_msigdb_G,  
                        pvalueCutoff = 0.05, pAdjustMethod = "BH") 
@@ -3753,6 +3788,85 @@ map(patients,  ~ Feature_rast(GDTlung_s %>%  subset(patient == .x), "cdr3_TRD_pe
                                 legend.margin = margin(0,0,0,-15, "pt")), coord_fixed()) )  %T>% print() ) %>% PG()
 
 
+# Figure S1  QC and general infor -----------------------------------------
+
+# Facs sorting 
+
+FS1AB <- NA
+
+# FS1C mean gene and so 
+
+FS1C <-  ViolinPlot(GDTlung_s, c("nFeature_RNA", "nCount_RNA", "percent.mito", "percent.ribo"), group.by = "orig.ident", 
+                    colors = umap.colors, box = T, ncol = 2, jitter = F, ylabtext = "", othertheme = list(theme(plot.title = element_blank()))) %T>% print()
+
+# FS1D Umap split 
+
+FS1D <-  (Feature_rast(GDTlung_s, sz = 0.3,
+                       labelsize = 4.5, do.label = F, facets = "patient",facetcol = 4,
+                       noaxis = F, othertheme = list(theme( 
+                         legend.margin = margin(0,0,0,-10, "pt")), coord_fixed()) 
+                       
+)+ggtitle('gdT cells')) %T>% print() 
+
+
+# FS1E TEMRA 
+
+FS1E <-  (Feature_rast(GDTlung_cite,do.label = F,sz = 0.3,
+                       g = 'tissue',
+                       
+                       d1 ='CD45RA.protein', d2 =  'CD27.protein',
+                       colorset = c("blue", "red"), 
+                       
+                                           noaxis = F, assay = 'CITE',
+                       axis.number = T)+
+            geom_hline(yintercept = 0.3, linewidth = 0.2)+ggtitle("Memory status")+
+            geom_vline(xintercept = 2.3,linewidth = 0.2)
+) %T>%  print()
+
+# FS1F TRM  
+FS1F <- 
+(Feature_rast(GDTlung_cite,do.label = F,sz = 0.3,
+              g = 'tissue',
+                  
+              d1 ='CD49a.protein', d2 =  'CD103.protein',
+              colorset = c("blue", "red"),
+                  
+              
+              # slot = 'scale.data',
+              noaxis = F, assay = 'CITE',
+              axis.number = T)+
+    geom_hline(yintercept = 1, linewidth = 0.2)+ggtitle("Tissue residency")+
+    geom_vline(xintercept = 2,linewidth = 0.2)
+) %T>%  print()
+
+
+ # FS1G TCR coverage   
+FS1G <-  map2(list(TRDmapp, TRGmapp, pairedmapp), list('v_gene_TRD','v_gene_TRG', 'paired_sp'),~
+                ggplot(.x, aes_string('patient', y = "percent", color = .y, fill = .y))+
+                geom_bar(stat = 'identity',  width = 0.5,position = position_stack(reverse = T))+
+                color_m()+
+                fill_m()+
+                xlab(NULL)+
+                ylab('coverage(%)')+
+                ggtitle(.y)+
+                guides(color = F, fill = guide_legend(nrow =4, title = NULL))+
+                theme_minimal()+
+                
+                mytheme+
+                theme(axis.text.x = element_text(angle = 270), legend.key.size = unit(2, "mm"), legend.key.spacing =unit(0.5, "mm"), )+
+                gglp('b')
+              
+) %>% PG(nrow =1) %T>% print()
+
+
+FS1AtoD <- PG(list(FS1AB, FS1AB, FS1C), nrow = 1, labels = "AUTO", rw = c(1,0.8,0.8)) %>% list(FS1D) %>% PG(nrow = 2, rh = c(1, 2), labels = c(NA,"D")) 
+
+
+FS1EFG <- PG(list(FS1E, FS1F, NA), nrow = 1, rw = c(1,1),labels = c("E", "F")) %>%  list(FS1G) %>% PG(nrow = 2,  labels = c(NA,"G"),rh = c(1, 1.5))  %T>% print()
+  
+FS1 <- PG(list(FS1AtoD, FS1EFG), ncol = 1 , rh  = c(3,2.5) ) %T>% print() %T>% figsave("Supp_figure1.pdf", 190,  270, path = figpath_ni)
+
+
 
 # Figure 2_new TRMs ----------------------------------------------------------------
 
@@ -3928,6 +4042,20 @@ F2H <-  GSEA_multipplot(GSEA_TRMvsTEMRA_allref, c(
 
 F2H+mytheme
 
+
+F2Hnew_gene_module <-  
+  c(1,10,11,9) %>% map(~
+                         ViolinPlot(GDTlung_s, gc_name[.x],ylabtext = "score",
+                                    x.angle = 90, mythe = T, size = 6,, othertheme =list(theme(plot.title = element_text(size = 6)), stat_compare_means(method = "kruskal.test", size = gs(6))) ,
+                                    colors =  umap.colors, box = T)+
+                         ggtitle(gcanno[.x])
+  ) %>% PG(ncol = 4) 
+F2Hnew_gene_module
+
+figsave(F2Hnew_gene_module, "F2Hnew_gene_module.pdf", path = figpath_ni, 200, 65)
+
+
+
 # F2H <-   PG(list(F2H, NA), ncol =2, rw = c(1, 1)) %T>% print()
 
 
@@ -3957,7 +4085,6 @@ F2I_des <-Feature_density(GDTlung_s,
                           othertheme =list(theme(
                             legend.position = "none"), coord_fixed())
 )
-
 
 
 
@@ -4229,6 +4356,10 @@ F3_nofacs <- (PG(list(F3ABC,F3DEF), nrow = 2, greed = F, rh = c(1,1)) +
   print() %>% figsave( "Figure3_Vg9Vd2_2025_NoFACS.pdf", 
                        path = figpath_ni,
                        200, 120)
+
+
+
+
 
 
 

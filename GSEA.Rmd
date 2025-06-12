@@ -1,0 +1,191 @@
+---
+title: "GSEA analysis for single-cell RNAseq data with R"
+author: "Likai Tan"
+date: "2025-06-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+You can find what is GSEA from here <https://www.gsea-msigdb.org/gsea/msigdb/index.jsp>
+
+```{r load packages}
+library(clusterProfiler)
+library(msigdbr)
+library(org.Hs.eg.db)
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(magrittr)
+```
+
+here we create a function Genelist_generator based on the Seurat function "FindMarkers" to generate a genelist for GSEA analysis object is a Seurat object, ident.1 & 2 are the two clusters you want to compare rm are the genes you want to remove, by default I removed mitochondria genes (genes start with MT) and ribosomal genes (genes start with RP) sort: I sort the genelist using avg_log2FC, if you run GSEA based on a Pseudobulk object, you need choose sig test.use: which statitic method you want to use for the DE analysis min.pct: to filter out the background genes
+
+```{r func Genelist_generator }
+Genelist_generator <- function(object, ident.1, ident.2, rm = "^MT|^RP",sort = "avg_log2FC", test.use = 'bimod', min.pct = 0.1) {
+  logfclist <- FindMarkers(object = object, ident.1 = ident.1, ident.2 = ident.2,
+                           test.use = test.use ,logfc.threshold = 0, 
+                           only.pos = F,  min.pct = min.pct) %>%
+    tibble::rownames_to_column('SYMBOL') %>% 
+    mutate( # Replace p_val_adj = 0 with the smallest positive double to avoid -log10(0) = Inf
+      p_val_adj = ifelse(p_val_adj == 0, .Machine$double.xmin, p_val_adj),
+      sig = avg_log2FC * -log10(p_val_adj)) %>% 
+    # dplyr::arrange(desc(avg_log2FC)) %>%
+    dplyr:: filter(!grepl(rm, SYMBOL) )
+  genelist <- logfclist[[sort]]
+  names(genelist) <- as.character(logfclist$SYMBOL)
+  return(sort(genelist, decreasing = T))
+}
+
+```
+
+In case you like to use the entrzeID instead of gene symbols, here is the code for entrezlist_generator
+
+```{r func entrezlist_generator}
+entrezlist_generator <- function(object, ident.1, ident.2, OrgDB = c('org.Hs.eg.db'),rm = "^MT|^RP", sort = "avg_log2FC",test.use = 'bimod', min.pct = 0) {
+  logfclist <- FindMarkers(object = object, ident.1 = ident.1, ident.2 = ident.2,
+                           test.use = test.use ,logfc.threshold = 0, 
+                           only.pos = F,  min.pct = min.pct) %>% mutate(sig = avg_log2FC*-log10(p_val_adj)) %>% 
+    tibble::rownames_to_column('SYMBOL') %>% 
+    # dplyr::arrange(desc(avg_log2FC)) %>%
+    dplyr:: filter(!grepl(rm, SYMBOL) )
+  logfclist <- clusterProfiler::bitr(logfclist$SYMBOL, fromType="SYMBOL",
+                    toType="ENTREZID", OrgDb=OrgDB) %>%
+    right_join(logfclist, by = 'SYMBOL')
+  entrezidlist <- logfclist[[sort]]
+  names(entrezidlist) <- as.character(logfclist$ENTREZID)
+  return(sort(entrezidlist, decreasing = T))
+}
+
+
+```
+
+Here I made another function to make multiple GSEA plots, I think it is nicer for me but you can stay with the functioo in Clusterprofile
+
+x is the GSEA result description_to_show: which terms you want to show legendpvalue: show the p value or not rel_h: relative height of each part base_size: font size plots: which part of GSEA plot you want to show
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+```{r func GSEA plot}
+GSEA_multipplot <- function(x, description_to_show, legendpvalue = F,
+                            rel_h = c(1, 0.1, 0.4),
+                            legend.position = 'bottom', c1,c2,
+                            base_size = 6, title = paste('GSEA',c1,'vs',c2), 
+                            plots = c(1,2,3),
+                            col = "green") {
+  require(enrichplot)
+  GSEAall_1 <- gseaplot2(x, color = col,
+                         geneSetID = description_to_show,
+                         base_size = base_size, pvalue_table = legendpvalue, subplots = 1) +
+    theme(legend.position = 'none', line = element_line(size = 0.5),axis.line.x = element_blank(),
+          axis.text.y = element_text(size = 6),
+          axis.line.y = element_line(size = 0.25),
+          axis.ticks = element_blank(),
+          axis.text.x = element_blank())+
+    geom_hline(aes(yintercept=0), linetype="dashed", size = 0.3)+
+    ggtitle(title)+
+    theme(plot.title = element_text(size = base_size, hjust = 1, vjust = 0.5),
+          panel.grid.minor.x = element_blank(), panel.grid.major.x = element_blank()
+    )
+  GSEAall_2 <- gseaplot2(x, color = col,
+                         geneSetID = description_to_show,base_size = base_size, pvalue_table = F, subplots = 2)+
+    theme(legend.position = 'none', line = element_line(size = 0.5),axis.line.x = element_blank(),
+          axis.line.y = element_line(size = 0.25),
+          panel.grid = element_blank(),
+          plot.margin=margin(l=-0.8,unit="cm"),
+          axis.ticks = element_blank(), axis.text.x = element_blank())
+  GSEAall_3 <- gseaplot2(x, color = col,
+                         geneSetID = description_to_show,base_size = base_size,
+                         pvalue_table = F, subplots = 3)+
+    theme(legend.position = 'none',           axis.line = element_line(size = 0.25),
+          axis.text = element_text(size = 6),
+          plot.margin=margin(l=-0.8,unit="cm"),
+          panel.grid = element_blank(),
+          axis.title = element_text(size = 6))+
+    scale_x_continuous(breaks = c(1, length(x@geneList)), expand = c(0, 0),
+                       labels=c(paste(c1,'high'),paste(c2,'high')))
+  
+    GSEA_all_list <-  list(GSEAall_1, GSEAall_2, GSEAall_3)
+  GESA_legend <-
+    cowplot::get_legend(gseaplot2(x, color = col,
+                                  geneSetID = description_to_show,base_size = base_size,
+                                  pvalue_table = legendpvalue, subplots = 1)+
+                          theme(legend.position = 'right', legend.text  = element_text(size = 6)))
+  GSEA_all <- plot_grid(plotlist = GSEA_all_list[plots], ncol = 1, scale = 1,
+                        align = "v", axis = 'y', rel_heights = rel_h)
+  if (legend.position == 'bottom'){
+    GSEA_all <- plot_grid(plotlist = list(GSEA_all, GESA_legend), ncol =1,
+                          rel_heights = c(1, 0.12)) %>% ggplotify::as.ggplot()
+  } else   {
+    if (legend.position != 'no')
+      GSEA_all <- plot_grid(plotlist = list(GSEA_all, GESA_legend), ncol =2) %>%
+        ggplotify::as.ggplot()
+  }
+  return(GSEA_all)
+}
+```
+
+Next we need load the reference genesets we need
+
+here is the genesets looks like
+
+```         
+# A tibble: 1,864,835 × 2    gs_name                                                            gene_symbol    <chr>                                                              <chr>        1 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ACD          2 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ACLY         3 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ACO2         4 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ACTB         5 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ADD1         6 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN AFF4         7 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ANTXR2       8 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ARAP1        9 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ARF1        10 ANDERSON_BLOOD_CN54GP140_ADJUVANTED_WITH_GLA_AF_AGE_18_45YO_1DY_DN ARF3  
+```
+
+```{r}
+ALL_msigdb_G  <- rbind(
+  # c7 Immunology 
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
+  # hallmarker
+  msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # C2 KEGG
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG'),
+  # GOBP
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
+  dplyr::select(gs_name, gene_symbol)
+```
+
+Now generate the genelist
+
+it will be a genelist between two clusters
+
+```{r}
+
+TRMvsTEMRA <- Genelist_generator(GDTlung_s, 'gd_TRM_LG6', 'gd_TEMRA_LG3', sort = "avg_log2FC", min.pct = 0.05)
+```
+
+```{r}
+head(TRMvsTEMRA)
+```
+
+then now you can run the GESA useing ClusterProfile!
+
+TERM2GENE is the reference genesets you want to use
+
+```{r}
+GSEA_TRMvsTEMRA_allref<-GSEA(geneList = TRMvsTEMRA, TERM2GENE=ALL_msigdb_G,  
+                       pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+```
+
+Have a look
+
+```{r}
+GSEA_TRMvsTEMRA_allref@result
+
+```
+
+I choose some terms to show
+
+```{r}
+
+GSEA_multipplot(GSEA_TRMvsTEMRA_allref,description_to_show = c('GSE25087_TREG_VS_TCONV_ADULT_UP', 'KEGG_NATURAL_KILLER_CELL_MEDIATED_CYTOTOXICITY'), base_size = 8,legend.position = 'bottom',
+                
+                title = "GSEA TRM vs TEMRA",legendpvalue = F,
+                
+                c1='TRM_LG6', c2 = 'TEMRA_LG3' ) %T>% print()
+```

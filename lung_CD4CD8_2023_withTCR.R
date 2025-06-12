@@ -15,18 +15,16 @@ library(Cairo)
 library(Matrix)
 library(ggalluvial)
 library(gridExtra)
-
 library(openxlsx)
-library(rstatix)
+library(rstatix)A
 # themes and functions ------------------------------------------------------------------
 source('/home/big/tanlikai/script/rscripts/funcs.r')
-
 
 
 file.edit('//home/big/tanlikai/script/rscripts/funcs.r')
 
 multicores()
-
+ 
 
 #paralell computation
 
