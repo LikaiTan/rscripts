@@ -2772,6 +2772,58 @@ abcor <-  rcorr(cbind(abTp, abTpln) %>% as.matrix(),type = 'spearman')
 corrplot(abcor[['r']], type="lower", col = rev(COL2('RdBu', 200)),
          p.mat = abcor[['P']], sig.level = 0.01, insig = "blank")
                                                                                                                                                                                                                                              print(result_ln[["n"]])
+# public TRD --------------------------------------------------------------
+
+alluniqueTRD <- readRDS('/home/big/tanlikai/Human_GDT_2019/alluniqueTRD.rds')
+
+lung_uniqueTRD <- GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% group_by(orig.ident) %>%
+  dplyr::count(cdr3_TRD) %>%  pull(cdr3_TRD)
+
+alluniqueTRD <- c(alluniqueTRD, lung_uniqueTRD)
+
+publicTRD_ALL <- as.data.frame(alluniqueTRD) %>%  dplyr::count(alluniqueTRD) %>%  dplyr::filter(n >1) %>% arrange(-n) %>% 
+  dplyr::rename('cdr3_TRD' = 'alluniqueTRD' , 'detected.no' = 'n' )
+
+publicTRD_ALL
+
+
+
+
+
+
+
+
+GDTlung_s@meta.data  %<>%  left_join(publicTRD_ALL, by = 'cdr3_TRD',suffix  = c("", "")) %>% 
+  dplyr::mutate(public_TRD = case_when(
+    cdr3_TRD %in% publicTRD_ALL$cdr3_TRD ~ paste0('public', v_gene_TRD),
+    !is.na(cdr3_TRD) ~ 'private TRD'
+  )) %>%  dplyr::mutate(
+    public_TRD_freq = case_when(
+      detected.no > 50 ~"most public (>50)",
+      detected.no %in% 21:50 ~  "common public (21 ~ 50)",
+      detected.no %in% 5:20 ~  "public (5 ~ 20)",
+      detected.no %in% 2:4 ~ "rare public (2 ~ 4)",
+      !is.na(cdr3_TRD) ~ 'private TRD'
+    )  ) %>% mutate(public_TRD_freq = factor(public_TRD_freq, levels = c(
+      "most public (>50)","common public (21 ~ 50)",
+      "public (5 ~ 20)","rare public (2 ~ 4)",'private TRD'
+    )))  %>%  `rownames<-`(GDTlung_s$bc_backup)
+
+# GDTlung_s@meta.data%<>%  `rownames<-`(GDTlung_s$bc_backup)
+
+pbcl <- c("#E41A1C","#FF7F00", "#aa80ff", "#377EB8",
+          alpha("#B4B7BA", 0.1))
+
+
+Feature_rast(GDTlung_s, 'public_TRD_freq', do.label = F,  colorset = pbcl)
+Feature_rast(GDTlung_s, 'public_TRD', do.label = F,  colorset = rev( c("#E41A1C","#FF7F00", "#aa80ff", "#377EB8",
+                                                                       alpha("#B4B7BA", 0.3))
+),
+             sz = 2, noaxis = F, othertheme = list(coord_fixed()))
+
+GDTlung_s$detected.no %>%  table()
+
+
 # !!!!!!!!!!!stop!!!!!!!!!!!!!!!!!!!! -------------------------------------
 
 
@@ -2905,6 +2957,9 @@ GDT_Lung_BL <- readRDS('GDT_Lung_BL_integrated_pb_and_lung.rds')
 #   ScoreJackStraw(dims = 1:80) 
 # JackStrawPlot(GDTlung_s, dims = 1:50 ) %T>%
 #   figsave('GDT_lung_PB.jackstraw.pdf' , w = 400, h = 400)
+
+GDT_Lung_BL$tissue
+Feature_rast(GDT_Lung_BL, g = "tissue")
 
 
 # Figs --------------------------------------------------------------------
@@ -3207,54 +3262,6 @@ writeLines(allbc$`p71&p31&p27`, 'raw/surface_falk3_gd/outs/filtered_feature_bc_m
 
 
 writeLines(allbc$p73p77, 'raw/surface_falk77_73_gd/outs/filtered_feature_bc_matrix/filteredBC.tsv')
-# public TRD --------------------------------------------------------------
-
-alluniqueTRD <- readRDS('/home/big/tanlikai/Human_GDT_2019/alluniqueTRD.rds')
-
-lung_uniqueTRD <- GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% group_by(patient) %>% count(cdr3_TRD) %>%  pull(cdr3_TRD)
-
-alluniqueTRD <- c(alluniqueTRD, lung_uniqueTRD)
-
-publicTRD_ALL <- as_data_frame(alluniqueTRD) %>% count(value) %>%  filter(n >1) %>% arrange(-n) %>% 
-  dplyr::rename('cdr3_TRD' = 'value' , 'detected.no' = 'n' )
-
-GDTlung_s@meta.data %>% filter(!is.na(v_gene_TRD)) %>% mutate(cdr3_TRD = paste0(v_gene_TRD, cdr3_TRD))  %>% group_by(patient) %>% count(cdr3_TRD) %>%  pull(cdr3_TRD) %>% 
-  
-  as_data_frame() %>% count(value) %>%  filter(n >0) %>% arrange(-n) %>% 
-  dplyr::rename('cdr3_TRD' = 'value' , 'detected.no' = 'n' )
-
-
-grep('CALGELYGPLYWGPTPRTTDKLIF', alluniqueTRD)
-
-
-
-
-
-publicTRD_ALL
-
-GDTlung_s@meta.data  %<>%  left_join(publicTRD_ALL, by = 'cdr3_TRD') %>% 
-  dplyr::mutate(public_TRD = case_when(
-    cdr3_TRD %in% publicTRD_ALL$cdr3_TRD ~ paste0('public', v_gene_TRD),
-    !is.na(cdr3_TRD) ~ 'private TRD'
-  )) %>%  dplyr::mutate(
-    public_TRD_freq = case_when(
-      detected.no > 50 ~"most public (>50)",
-      detected.no %in% 21:50 ~  "common public (21 ~ 50)",
-      detected.no %in% 5:20 ~  "public (5 ~ 20)",
-      detected.no %in% 2:4 ~ "rare public (2 ~ 4)",
-      !is.na(cdr3_TRD) ~ 'private TRD'
-    )  ) %>% mutate(public_TRD_freq = factor(public_TRD_freq, levels = c(
-      "most public (>50)","common public (21 ~ 50)",
-      "public (5 ~ 20)","rare public (2 ~ 4)",'private TRD'
-    ))) 
-
-GDTlung_s@meta.data%<>%  `rownames<-`(GDTlung_s$bc_backup)
-
-Feature_rast(GDTlung_s, 'public_TRD', do.label = F, facets = 'patient')
-
-GDTlung_s$detected.no %>%  table()
-
-
 # FACS data  ----------------------------------------------------- --------
 
   
@@ -4208,12 +4215,27 @@ Feature_rast(GDTlung_s, "AREG", facets= "patient")
 GDTlung_s$Vg9Vd2
 F3A <- (Feature_rast(GDTlung_s, sz = 0.3, "Vg9Vd2", colorset = umap.colors[c(3,6)],
                      navalue = alpha("grey50",0.2),
-                  do.label = F, othertheme =list(theme(
+                  do.label = F, 
+                  othertheme =list(theme(
+                    legend.position = c(0.8, 0.05), legend.justification = c(0.05, 0.05),
+                    legend.background = element_rect(fill = "transparent"),
                     legend.margin = margin(0,0,0,-10, "pt")),coord_fixed(),
                     ggtitle("Paired TCRgd")),
                   noaxis = F
                   
 )+ggtitle('TCRgamma-delta')) %T>% print() 
+
+theme(legend.position = c(0.05, 00.05), legend.justification = c(0.05, 0.05))
+F3B <-  Feature_rast(GDTlung_s, 'public_TRD', do.label = F,  
+             colorset = rev( c("#E41A1C","#FF7F00", "#aa80ff", "#377EB8",alpha("#B4B7BA", 0.2))),
+sz = 2, noaxis = F, 
+othertheme = list(
+  theme(
+    legend.position = c(0.8, -0.05), legend.justification = c(0.05, 0.05),
+    legend.background = element_rect(fill = "transparent"),
+    legend.margin = margin(0,0,0,-10, "pt")),
+  coord_fixed())) %T>% print() 
+
 
 GDTlung_s$paired_sp
 VD2freqtable %<>% mutate(tissue = replace(tissue, tissue == "Pulm", "Lung"))
@@ -4221,7 +4243,7 @@ VD2freqtable %<>% mutate(tissue = replace(tissue, tissue == "Pulm", "Lung"))
 VD2freqtable$cdr3_paired <-  as.vector(VD2freqtable$cdr3_paired)
 # VD2freqtable   %<>% group_by(tissue) %>%   arrange(desc(TCRDfreq)) %>%  mutate( cdr3_pa.ired = factor(cdr3_paired))  
 VD2freqtable
-F3B <-  (VD2freqtable %>% 
+F3C <-  (VD2freqtable %>% 
            ggplot(
              aes( x = tissue, y = TCRDfreq, fill = cdr3_paired,  stratum= cdr3_paired  , alluvium  = cdr3_paired            ))+
            ggtitle("Vg9Vd2 TCRs sharing between lung & LN")+
@@ -4247,7 +4269,7 @@ F3B
 #                     sz = 0.3, ncol = 2,  othertheme =list(theme(
 #                       legend.margin = margin(0,0,0,-10, "pt")),coord_fixed() )  ) %T>% print() 
 
-F3C  <- Feature_rast(GDTlung_cite, 
+F3D  <- Feature_rast(GDTlung_cite, 
                     c("KLRB1.protein",  "CCR6.protein", "CD26.protein", "IL7R.protein"),
                     sz = 0.5, ncol = 2, colorgrd = "grd2",
                     othertheme =list(theme(
@@ -4279,7 +4301,7 @@ F3F <-  ViolinPlot(GDTlung_s %>%  subset(Vg9Vd2 %in% c("GV9 DV2" , "other γδTC
                    c("RORA-REG","STAT3-REG", "TBX21-REG" ), assay = "AUC", colors = umap.colors[c(1,15)]) %T>%  print()
 
 
-
+PG(list(F3A, F3B,F3C), labels = "AUTO", ncol = 3, rw = c(1,1,0.5))%T>% print() 
 
 
 F3ABC <- PG(list(F3A, F3B,F3C), labels = "AUTO", ncol = 3, rw = c(1.2,0.8,1))%T>% print() 

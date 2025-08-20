@@ -69,9 +69,12 @@ Feature_rast(COPD_pub, c("qc.nCount.Outlier", "qc.mit.Outlier", "doublet_scruble
 
 ViolinPlot(COPD_pub, "doublet_scrublet", group.by = "orig.ident")
 
+ViolinPlot(COPD_pub, c("IL32", "TGFB1"), group.by = "disease")
+
 ViolinPlot(COPD_pub, "IL32", group.by = "disease")
 
 
+VlnPlot(COPD_pub,  c("IL32", "TGFB1"), group.by = "disease", pt.size = 0.1, alpha = 0.1)
 
 # # add module score  -----------------------------------------------------
 

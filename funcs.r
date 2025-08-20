@@ -96,7 +96,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
                            min.pct = 0.1, genetoshow = 50, ds = 500) {
   DefaultAssay(ob) <- assay
     if (!is.null(group.by)) {
-      Idents(ob) <- group.by
+      ob <-  SetIdent(ob, value = group.by)
     }
   result <- c()
   result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
@@ -560,8 +560,14 @@ entrezlist_generator <- function(x, id1, id2, OrgDB = c('org.Hs.eg.db'),rm = "^M
 }
 
 
-Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP",sort = "avg_log2FC") {
-  logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2,
+
+Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP",sort = "avg_log2FC", group.by = NULL) {
+  
+  if (!is.null(group.by)) {
+   x <-  SetIdent(x, value = group.by)
+  }
+ 
+   logfclist <- FindMarkers(object = x, ident.1 = id1, ident.2 = id2, 
                            test.use = 'bimod',logfc.threshold = 0, 
                            only.pos = F,  min.pct = 0.1) %>%
     tibble::rownames_to_column('SYMBOL') %>% 
@@ -574,6 +580,7 @@ Genelist_generator <- function(x, id1, id2, rm = "^MT|^RP",sort = "avg_log2FC") 
   names(genelist) <- as.character(logfclist$SYMBOL)
   return(sort(genelist, decreasing = T))
 }
+
 
 
 
