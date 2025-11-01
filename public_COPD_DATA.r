@@ -33,6 +33,9 @@ COPD_pub <- readRDS("public/pdd_copd_public_2023-09-18_revised.RDS")
 
 
 
+COPD_gdTcells <- readRDS("public/COPD_gdTcells.rds")
+
+Feature_density(COPD_gdTcells, "AREG", othertheme = list(coord_fixed()))
 
 
 saveRDS(COPD_pub, "public/pdd_copd_public_2023-09-18_revised.RDS")
@@ -129,7 +132,7 @@ ViolinPlot(COPD_pub, group.by =   "Level_3", g= "TRAB_score1", x.angle = 90)
 COPD_Tcells <- subset(COPD_pub, CD3_score1 > 0.3)
 
 
-
+COPD_Tcells$Level_3
 #
 
 # select gdT cells  -------------------------------------------------------
@@ -291,8 +294,13 @@ Feature_rast(COPD_gdTcells, c("ITGAE", "KLRG1", "AREG", "TRDV1", "TRDV2", "GZMA"
 # rename  -----------------------------------------------------------------
 
 
+Feature_density(COPD_gdTcells, c("AREG", "CSF1", "CSF2"),
+             othertheme = list(coord_fixed(), NoLegend()), ncol = 2)
 
+Feature_rast(COPD_gdTcells, c("ITGA1", "ITGAE", "ZNF683", "CXCR6"),
+                othertheme = list(coord_fixed()))
 
+COPD_gdTcells@assays$Protein %>% rownames() %>%  sort()
 
 COPD_gdTcells@meta.data  %<>% mutate(gd_cluster = case_when(seurat_clusters == "0" ~ "gdTRM_1",
                                                             seurat_clusters ==  "1" ~ 'gdTemra_1',
@@ -349,13 +357,15 @@ Feature_rast(COPD_gdTcells, "Level_4", colorset = "gg")
 
 
 # abundance ---------------------------------------------------------------
-
-
+COPD_gdTcells$Level_3
+Feature_rast(COPD_gdTcells, "Level_3")
 
 copdratio <-  (table(COPD_gdTcells$disease, COPD_gdTcells$gd_cluster) %>%  
                  prop.table(margin = 1)*100) %>% data.frame() %>% filter(!is.na(Freq)) %>% 
   `colnames<-`(c("disease", "gd_cluster","Percent"))
 
+
+Feature_density(COPD_gdTcells, "TRDC")
 
 
 copdratio_donor <-  COPD_gdTcells@meta.data %>%  
@@ -395,12 +405,11 @@ library(dplyr)
 library(patchwork)
 
 COPD_gdTcells@meta.data$disease %>% unique
-COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","moking-related ILD",
-                                                                             "GOLD I/II") ~ "COPD and Emphysema",  disease %in% c("Healthy", "Donor") ~ "Control" ))
+COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","Smoking-related ILD",  "GOLD I/II", "Bronchiolitis") ~ "COPD and Emphysema",  disease %in% c("Healthy", "Donor") ~ "Control" ))
 
-Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl")
+Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", othertheme = list(coord_fixed()), colorset = umap.colors[c(15,13)], do.label = F)
 
-
+COPD_gdTcells$disease %>% unique()
 
 
 copdratio_donor <-  COPD_gdTcells@meta.data %>%  filter(!is.na(COPD_vs_Ctrl)) %>% 
@@ -449,11 +458,15 @@ ggplot(da_results, aes(logFC, -log10(SpatialFDR))) +
 
 da_results <- annotateNhoods(COPD_gdTcells_ab_milo, da_results, coldata_col = "gd_cluster")
 head(da_results)
-da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.5, "Mixed", da_results$gd_cluster)
-plotDAbeeswarm(da_results, group.by = "gd_cluster",alpha = 0.5)+mytheme
+da_results$gd_cluster <- ifelse(da_results$gd_cluster_fraction < 0.1, "Mixed", da_results$gd_cluster)
+plotDAbeeswarm(da_results, group.by = "gd_cluster",alpha = 0.1)+mytheme+ gglp("r")
 
 
-ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
+COPD_gdTcells$disease
+table(COPD_gdTcells$disease, COPD_gdTcells$gd_cluster)
+
+
+ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_3")
 
 # gene module -------------------------------------------------------------
 
@@ -476,7 +489,7 @@ COPD_gdTcells@meta.data
 Feature_density(COPD_gdTcells,c(names(sigtable)[c(1:9, 14,15)]))
 
 ViolinPlot(COPD_gdTcells,c(names(sigtable)[c(1:9, 14,15)]), colors = umap.colors, box = T, group.by = "gd_cluster")
-
+ViolinPlot(COPD_gdTcells,c("Tissue.resident" , "Tregs","CD8.Cytotoxictiy"  ), colors = umap.colors, box = T, group.by = "gd_cluster")
 
 
 gene_c_list_ent <-readRDS('/home/big/tanlikai/Human_GDT_2019/Integrated/Genemodule_list_ent_2020AUG.RDS')
@@ -536,7 +549,7 @@ AllDEGs_COPDpub %>%  filter(gene %in% c("CCR6", "DPP4", "RORC","FCGR3A", "NKG7",
  
  ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
  
- Feature_rast(COPD_gdTcells, c("ENTPD1", "PDCD1", "CTLA4"))
+ Feature_rast(COPD_gdTcells, c("ENTPD1", "disease", "CTLA4"))
  
  
  AllDEGs_COPDpub <-  FindAllMarkers(COPD_gdTcells,logfc.threshold = 0.25,only.pos = T,min.pct = 0.1) 
@@ -618,7 +631,7 @@ genelist_c0_c1 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTemra_1")
 genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
 
 genelist_TRM_1_TRM_2 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
-
+genelist_TRM_1_TRM_2
 
 
 ibrary(clusterProfiler)
@@ -645,7 +658,14 @@ GSEA_c0_c1 <- GSEA(geneList = genelist_c0_c1, TERM2GENE=ALL_msigdb_G,
 
 GSEA_c0_c1@result  <- GSEA_c0_c1@result %>% arrange(desc(NES))  %T>% view()
 
+HALLMARKERS <-   msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>% 
+  dplyr::select(gs_name, gene_symbol)
 
+GSEA_TRM1TRM2_H <-   GSEA(geneList = genelist_TRM_1_TRM_2, TERM2GENE=HALLMARKERS,
+                        # minGSSize    = 10,
+                        pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+
+GSEA_TRM1TRM2_H@result
 
 GSEA_c0_c1_GO <- GSEA(geneList = genelist_c0_c1, TERM2GENE=GOBP,
                    # minGSSize    = 10,
@@ -923,5 +943,5 @@ Feature_rast(COPD_gdTcells, c( "disease"), facets = "orig.ident", do.label = F, 
 Feature_rast(COPD_gdTcells, c( "gd_cluster"), facets = "orig.ident", do.label = F, sz = 1.5)
 
 
-Feature_rast(COPD_Tcells, colorgrd = "gg")
+Feature_rast(COPD_gdTcells,  c("TRDV2", "TRDV1", "TRDV3"))
 Feature_rast(COPD_gdTcells, c("ident", "NR3C1", "RBPJ", "STAT1", "IRF4"), ncol = 2 )

@@ -1,3 +1,10 @@
+# Single-Cell RNA-seq Analysis Functions with Annotations
+# Author: Likai TAN
+# Date: [Date]
+# Description: Comprehensive collection of functions for single-cell RNA sequencing analysis
+
+# Load required libraries
+
 library(Seurat)
 library(ggplot2)
 library(Nebulosa)
@@ -17,7 +24,14 @@ library(RColorBrewer)
 
 # mytheme -----------------------------------------------------------------
 
+# ============================================================================
+# THEMES AND STYLING
+# ============================================================================
 
+#' Standard theme for publication-quality plots
+#' 
+#' A pre-defined ggplot2 theme optimized for small, publication-ready figures
+#' with consistent 6pt font sizing and thin axis lines.
 
 mytheme <- theme(plot.title = element_text(size = 6 , face = 'plain'),
                  plot.subtitle = element_text( face = 'plain',size = 6),
@@ -28,11 +42,30 @@ mytheme <- theme(plot.title = element_text(size = 6 , face = 'plain'),
                  axis.title = element_text(size = 6),
                  axis.line = element_line(size = 0.25),
                  axis.text = element_text(size = 6))
+#' Heatmap-specific theme
+#' 
+#' Theme optimized for heatmap visualizations with italic y-axis labels
+#' and bottom legend positioning.
+
 heattheme <-   theme(axis.text.y = element_text(size = 6, face = 'italic'),
                      legend.key.height  = unit(2, 'mm'),
                      legend.position = 'bottom',
                      legend.margin = margin(-7,30,0,0, "mm"),
                      plot.subtitle = element_text(size = 6))
+
+#' Customizable heatmap theme function
+#'
+#' @param gp ggplot object to modify
+#' @param size Text size for plot elements (default: 6)
+#' @param legend.position Position of legend (default: 'bottom')
+#' @param legend.margin Margin settings for legend
+#' @param m Color for middle values (default: 'white')
+#' @param l Color for low values (default: 'blue') 
+#' @param h Color for high values (default: 'red')
+#' @param color Show color guide (default: FALSE)
+#' @param fill Fill guide settings (default: NULL)
+#' @param dotsize Show size guide (default: FALSE)
+#' @return Modified ggplot object with heatmap styling
 
 heat_theme <- function(gp,size = 6, legend.position = 'bottom',
                        legend.margin = margin(-7,30,0,0, "mm"),
@@ -54,30 +87,36 @@ heat_theme <- function(gp,size = 6, legend.position = 'bottom',
     guides(color = color, fill = fill, size = dotsize)
 
 }
+# Pre-defined color scales
 
 scale_color_gradient2(low = '#003399', mid = '#ffccff',  high = "#990000")
+#' Remove x-axis elements
 
 nox <- theme(axis.text.x = element_blank(),
              axis.ticks.x  = element_blank(),
              axis.title.x = element_blank())
+#' Remove all axis ticks and text
 
 notick <-   theme(axis.ticks = element_blank(), axis.text = element_blank())
 
+#' Standard heatmap color scale (blue-white-red)
 hmp <- scale_fill_gradient2(mid = 'white', low = 'blue', high = 'red')
 
 
-
+#' Spectral color scale for heatmaps
 hmp2 <- scale_fill_gradientn( colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(50))
 
+#' Spectral gradient with NA handling
 grd <- scale_color_gradientn( na.value = alpha('lightgrey', 0.3),
   colours = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 11, name = "Spectral")))(100))
 
-# grd_3c <-     scale_color_gradient2(low = alpha('lightgrey', 0.3), high = 'red', mid = 'purple',
-#                                     midpoint = median(FetchData(HumanGDT, x)[,1][FetchData(HumanGDT, x)[,1]>0]) )
 
 
-#'compare one seurat cluster with another
-#gglegendpostion
+#' Quick legend positioning function
+#'
+#' @param p Position character ('n'=none, 'r'=right, 'l'=left, 't'=top, 'b'=bottom)
+#' @param s Legend key size in mm (default: 3)
+#' @return Theme element for legend positioning
 
 gglp <- function(p = 'n', s= 3) {
   position <-c('right', 'left', 'top', 'bottom', 'none') %>%
@@ -85,7 +124,35 @@ gglp <- function(p = 'n', s= 3) {
   theme(legend.position = position[[p]], legend.key.size = unit(s, 'mm') )
 }
 
-# ClusterCompare()
+
+# ============================================================================
+  # COMPARISON AND ANALYSIS FUNCTIONS
+  # ============================================================================
+
+#' Compare gene expression between two Seurat clusters
+#'
+#' Performs differential expression analysis between two specified clusters
+#' and optionally generates a heatmap of top differentially expressed genes.
+#'
+#' @param ob Seurat object
+#' @param id1 First cluster identity for comparison
+#' @param id2 Second cluster identity for comparison  
+#' @param log2fc Log2 fold change threshold (default: 0.25)
+#' @param group.by Grouping variable if different from active idents
+#' @param rm Regular expression pattern to remove genes (default: "^MT|^RP")
+#' @param test Statistical test to use (default: 'bimod')
+#' @param angle Angle for heatmap gene labels (default: 20)
+#' @param p_cutoff Adjusted p-value cutoff (default: 0.05)
+#' @param assay Assay to use (default: 'RNA')
+#' @param slot Data slot to use (default: "data")
+#' @param do.plot Generate heatmap plot (default: TRUE)
+#' @param group.colors Custom colors for groups
+#' @param features Specific features to test (default: NULL for all)
+#' @param min.pct Minimum percentage of cells expressing gene (default: 0.1)
+#' @param genetoshow Number of genes to display in heatmap (default: 50)
+#' @param ds Downsample cells for heatmap (default: 500)
+#' @return List containing 'table' (differential expression results) and 'plot' (heatmap)
+
 
 
 
@@ -128,36 +195,46 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
 }
 
 
+# ============================================================================
+# VISUALIZATION FUNCTIONS  
+# ============================================================================
 
-#'feature plot  rasterized
-#'Feature_rast()
-# Feature_rast is a function to draw scatter plot, the use of this function is similar to the DimPlot and
-# FeaturePlot function from Seurat package. However, it's more like a combination of DimPlot and FeaturePlot,
-# for it can draw plots with categorical color (like cluter) and  gradient color (like gene expression).
-# This function can draw plot from either a Suerat object, or directly from a simple data frame.
-# the plot is generated by ggrastr, so it produce rasterized plot. If doing a categorical plot, the labeling of
-# cells are done by shadowtext package. Meanwhile , purrr, dplyr, and cowplot packages are also required.
-
-# explain of functions.
-# data: the object for visualization. Either a Suerat object, or a dataframe.
-# g: the variables you want to visualize, can be a vector. by default it is the ident of a suerat project.
-# facet other variables you want to ewrapped into the ggolot object , that you can use facet_grid or facet_wrap to split fig
-# sz+ size of dot. dpi: resolution.
-# mid.point, when drawing a figure with numeric variable and gradient color, this can assign where should be the middle point. 0.5 means 50%
-# ncol: when you want to show a vector of variables,  how many columns you want. Note that we dont have nrow in this function
-# mythe: mytheme, a pre-define them in above.
-# titleface: the title face of the plot.
-# colorset: for  categorical variables, which set of color you wanto to use. It can be 'um", the umap.colors defined above (23 colors), or 'gg', ggplot color, or a vector you define.
-# color_grd: for gradient variables, which set of color you like, can choose from three color gradient or 'grd' color
-# if choosing 'thresscolor', you can define the three color by following variables : l (low), h (high), m (middle)
-# do.label: do you want to labels on your plot or not. label sizeL the size of lable.
-# titlesize: the size of title
-# othertheme: theme element for ggplot
-# d1 and d2: two dimensions, by default is UMAP_1 and UMAP_2
-# noaxis: if or not you want to axis
-# axis number:  whether or not to lable the axis numbers
-# sort: (if gradient) to sort the data frame from low to high
-# labels: if have multiple variables to show, you can assign labels for each one.
+#' Rasterized feature plotting for single-cell data
+#'
+#' Create scatter plots for single-cell data with support for both categorical
+#' and continuous variables. Combines functionality of DimPlot and FeaturePlot
+#' with rasterization for better performance on large datasets.
+#'
+#' @param data Seurat object or data frame
+#' @param g Variables to visualize (default: 'ident')
+#' @param facets Variables for facet wrapping
+#' @param other Additional variables to fetch
+#' @param sz Point size (default: 0.8)
+#' @param dpi Raster resolution (default: 300)
+#' @param mid.point Midpoint for gradient scales (default: 0.5)
+#' @param ncol Number of columns for multiple plots (default: min(5, length(g)))
+#' @param facetcol Number of columns for faceting
+#' @param mythe Apply mytheme (default: TRUE)
+#' @param titleface Title font face (default: 'italic')
+#' @param colorset Color scheme ('um' for umap.colors, 'gg' for ggplot colors)
+#' @param colorgrd Gradient color scheme ("grd1", "grd2", or custom vector)
+#' @param do.label Add cluster labels for categorical data (default: TRUE)
+#' @param labelsize Size of labels (default: 10)
+#' @param nrow Number of rows for multiple plots
+#' @param titlesize Title text size (default: 6)
+#' @param othertheme Additional theme elements
+#' @param d1 First dimension name (default: "UMAP_1")
+#' @param d2 Second dimension name (default: "UMAP_2") 
+#' @param noaxis Remove axes (default: TRUE)
+#' @param axis.number Show axis numbers (default: FALSE)
+#' @param legendcol Number of legend columns
+#' @param legendrow Number of legend rows
+#' @param labels Custom labels for multiple plots
+#' @param sort Sort data by values for gradient plots (default: TRUE)
+#' @param assay Assay to use (default: DefaultAssay(data))
+#' @param slot Data slot to use (default: 'data')
+#' @param navalue Color for NA values (default: "transparent")
+#' @return Single ggplot object or combined plot grid
 
 Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.8,
                          dpi = 300, mid.point = 0.5, ncol = min(5, length(g)), 
@@ -308,7 +385,34 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
 }
 
 
-
+#' Density-based feature plotting using Nebulosa
+#'
+#' Create density plots for gene expression visualization using kernel density
+#' estimation from the Nebulosa package.
+#'
+#' @param data Seurat object
+#' @param feature Gene(s) to plot
+#' @param sz Point size (default: 0.5)
+#' @param pal Color palette (default: "viridis")
+#' @param reduction Dimensionality reduction to use (default: 'umap')
+#' @param ncol Number of columns for multiple plots (default: min(5, length(feature)))
+#' @param joint Create joint density plots (default: FALSE)
+#' @param method Density estimation method ("ks", "wkde") (default: c("ks", "wkde"))
+#' @param adjust Bandwidth adjustment factor (default: 1)
+#' @param shape Point shape (default: 16)
+#' @param nrow Number of rows for plot arrangement
+#' @param othertheme Additional theme elements
+#' @param mythe Apply mytheme (default: TRUE)
+#' @param titleface Title font face (default: 'italic')
+#' @param titlesize Title size (default: 6)
+#' @param noaxis Remove axes (default: TRUE)
+#' @param axis.number Show axis numbers (default: FALSE)
+#' @param colorgrd Color gradient scheme (default: "grd1")
+#' @param navalue Color for NA values (default: "transparent")
+#' @param labels Custom plot labels
+#' @param assay Assay to use (default: DefaultAssay(data))
+#' @param slot Data slot to use
+#' @return Single plot or combined plot grid
 
 
 Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", reduction = 'umap',
@@ -397,8 +501,20 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
 
 
 
-#'ggplot color scheme generate ggplot colors, random or not
-#'ggplotColours()
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+#' Generate ggplot2-style colors
+#'
+#' Create a set of colors following ggplot2's default color scheme with
+#' optional randomization.
+#'
+#' @param n Number of colors to generate (default: 6)
+#' @param h Hue range as vector c(min, max) (default: c(0, 360) + 15)
+#' @param r Randomize color order (default: FALSE)
+#' @param seed Random seed for reproducible randomization (default: 1)
+#' @return Vector of hex color codes
 ggplotColours <- function(n = 6, h = c(0, 360) + 15, r = F, seed = 1){
   if ((diff(h) %% 360) < 1) h[2] <- h[2] - 360/n
  cl <-  hcl(h = (seq(h[1], h[2], length = n)), c = 100, l = 65)
@@ -419,7 +535,32 @@ gs  <- function(x) {
 gs(8)
 
 #'improved plot_grid
-#'PG()
+#' Enhanced plot_grid function
+#'
+#' Wrapper around cowplot::plot_grid with simplified parameter names
+#' and sensible defaults for common use cases.
+#'
+#' @param x List of ggplot objects
+#' @param align Alignment option (default: c("none", "h", "v", "hv"))
+#' @param axis Axis alignment (default: c("none", "l", "r", "t", "b", "lr", "tb", "tblr"))
+#' @param nrow Number of rows
+#' @param ncol Number of columns  
+#' @param rw Relative widths (default: 1)
+#' @param rh Relative heights (default: 1)
+#' @param labels Plot labels
+#' @param label_size Label text size (default: 8)
+#' @param label_fontfamily Label font family
+#' @param label_fontface Label font face (default: "bold")
+#' @param label_colour Label color
+#' @param label_x Label x position (default: 0)
+#' @param label_y Label y position (default: 1)
+#' @param hjust Horizontal justification (default: 0)
+#' @param vjust Vertical justification (default: 1.2)
+#' @param scale Plot scaling factor (default: 0.93)
+#' @param greedy Use greedy alignment (default: TRUE)
+#' @param cols Deprecated parameter
+#' @param rows Deprecated parameter
+#' @return Combined ggplot object
 PG <- function (x, align = c("none", "h", "v", "hv"),
                 axis = c("none", "l", "r", "t", "b", "lr", "tb", "tblr"),
                 nrow = NULL, ncol = NULL, rw = 1, rh = 1,
@@ -436,6 +577,14 @@ PG <- function (x, align = c("none", "h", "v", "hv"),
 
 #'sample with fixed seed
 #'set_samle()
+#'#' Sample with fixed seed for reproducibility
+#'
+#' Wrapper around sample() that sets a seed for reproducible random sampling.
+#'
+#' @param x Vector to sample from
+#' @param n Number of items to sample (default: NULL for all)
+#' @param s Random seed (default: 629)
+#' @return Sampled vector
 set_sample <- function(x,  n = NULL, s = 629)  {
   set.seed(s)
   if (is.null(n)) {
@@ -448,35 +597,6 @@ set_sample <- function(x,  n = NULL, s = 629)  {
 }
 
 
-
-#'function to save objects
-#'save object as rdata
-#'saverdata()
-
-# # saverdata <- function(x, file = NULL) {
-#   otc <- function(x) {
-#     c <-  as.character(substitute(x))
-#     if(length(c) > 1) {
-#       return(c[-1])
-#     } else {
-#       return(c)
-#     }
-#   }
-#
-#   save(list = otc(x), file = paste0(file,Sys.Date(),'.rdata'))
-# }
-
-
-#'save list
-#'otc()
-# otc <- function(x) {
-#   c <-  as.character(substitute(x))
-#   if(length(c) > 1) {
-#     return(c[-1])
-#   } else {
-#     return(c)
-#   }
-# }
 
 
 
@@ -675,6 +795,16 @@ nr(c(1,2,3,4),2,4)
 
 
 #label
+#' Add shadow text labels to plots
+#'
+#' Convenience function to add shadowtext labels with consistent styling.
+#'
+#' @param data Data frame containing label coordinates
+#' @param label Column name for label text (default: "center")
+#' @param color Text color (default: 'black')
+#' @param bg.colour Background/shadow color (default: 'white')
+#' @param size Text size (default: 10)
+#' @return shadowtext geom layer
 do.label <- function(data = NULL, label = "center", color = 'black',
                      bg.colour = 'white', size = 10  ){
   shadowtext::geom_shadowtext(data = data,  mapping = aes_string(label = label), color = color,
@@ -786,7 +916,36 @@ multicores <- function(core=20, mem = 100, strategy = 'multicore') {
 
 
 
+# SPECIALIZED PLOTTING FUNCTIONS
+# ============================================================================
 
+#' Enhanced heatmap with multiple grouping bars
+#'
+#' Create heatmaps with multiple grouping variables displayed as colored bars
+#' above the heatmap. Supports custom colors and sorting options.
+#'
+#' @param object Seurat object
+#' @param features Genes/features to plot
+#' @param cells Specific cells to include (default: NULL for all)
+#' @param group.by Primary grouping variable (default: "ident")
+#' @param additional.group.by Additional grouping variables
+#' @param additional.group.sort.by Variables to sort by within additional groups
+#' @param cols.use Named list of custom colors for each grouping variable
+#' @param group.bar Show grouping bars (default: TRUE)
+#' @param disp.min Minimum display value (default: -2.5)
+#' @param disp.max Maximum display value (default: NULL)
+#' @param slot Data slot to use (default: "scale.data")
+#' @param assay Assay to use (default: NULL)
+#' @param label Show group labels (default: TRUE)
+#' @param size Label size (default: 5.5)
+#' @param hjust Label horizontal justification (default: 0)
+#' @param angle Label angle (default: 45)
+#' @param raster Use rasterization (default: TRUE)
+#' @param draw.lines Draw separation lines (default: TRUE)
+#' @param lines.width Width of separation lines (default: NULL)
+#' @param group.bar.height Height of group bars (default: 0.02)
+#' @param combine Combine plots (default: TRUE)
+#' @return ggplot heatmap object or list of plots
 
 
 # DoMultiHeatmap, revised from https://github.com/satijalab/seurat/issues/2201 and https://github.com/elliefewings/DoMultiBarHeatmap/blob/main/R/domultiheatmap.func.R -------------------------------------------

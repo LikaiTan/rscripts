@@ -271,9 +271,24 @@ JackStrawPlot(GDTlung_s, dims = 1:50 )
 JackStrawPlot(GDTlung_s, dims = 1:50 ) %T>%
   figsave('GDTlung_8p.jackstraw.pdf' , w = 400, h = 400)
 
-GDTlung_s  %<>%  RunUMAP( dims = 1:35, seed=52,
-                          reduction = 'pca', min.dist = 0.2) %>%
-  FindNeighbors(dims = c(1:35))
+GDTlung_s  %<>%  RunUMAP( dims = 1:35, seed=52, return.model = T,reduction.key = "UMAP_" ,
+                          umap.method = "uwot", 
+                          reduction = 'pca', min.dist = 0.2) 
+
+GDTlung_s@assays$HTO
+GDTlung_s[["CITE"]]@key <- "CITE_"
+
+Feature_rast(GDTlung_s, "pheno")
+
+
+
+GDTlung_s_ref  %<>%  RunUMAP( dims = 1:35, seed=555,umap.method = "uwot", 
+                              return.model = T,assay = "integrated",
+                          reduction = 'pca', min.dist = 0.2 ,reduction.key = "UMAP_" )
+Feature_rast(GDTlung_s_ref, "pheno")
+
+
+
 
 for (i in seq(0.8,1.5,0.1) ) {
   GDTlung_s <- FindClusters(GDTlung_s, resolution = i)
@@ -2938,7 +2953,7 @@ GDT_Lung_BL <- readRDS('GDT_Lung_BL_integrated_pb_and_lung.rds')
 
 
 
-# anchors <- FindIntegrationAnchors(list(GDTlung_inte, Adult_GDT_2020AUG), dims = 1:60)
+anchors <- FindIntegrationAnchors(list(GDTlung_inte, Adult_GDT_2020AUG), dims = 1:60)
 
 # anchors
 # GDT_lung_PB <- IntegrateData(anchors, dims = 1:20)

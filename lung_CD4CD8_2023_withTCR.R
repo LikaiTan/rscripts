@@ -16,7 +16,7 @@ library(Matrix)
 library(ggalluvial)
 library(gridExtra)
 library(openxlsx)
-library(rstatix)A
+library(rstatix)
 # themes and functions ------------------------------------------------------------------
 source('/home/big/tanlikai/script/rscripts/funcs.r')
 
