@@ -810,331 +810,277 @@ figsave(Cellpop, "IL32_TRM_sc.pdf", path= figpath_ni, w  = 30, h = 70)
 
 
 # normal lung -------------------------------------------------------------
-lungH5AD <-  "normallungT.h5ad"
-
-mtx_data_lung <- data.table::fread("normallung.mtx", 
-                              skip = 3, col.names = c("i_row_idx", "j_col_idx", "count"))
-
-dims <- as.numeric(strsplit(readLines("normallung.mtx",
-                                      n = 3)[3], " ")[[1]])
-
-
-ad <-  read_h5ad(lungH5AD)
-genes <-  ad$var_names
-barcodes <-  ad$obs_names
-
-
-
-cell_metadata <- ad$obs %T>% head(.) %T>% print()
-gene_metadata <- ad$var %T>% head(.) %T>% print()
-
-length(genes)
-
-gene_translation <- bitr(
-  geneID = genes,
-  fromType = "ENSEMBL",
-  toType = "SYMBOL",
-  OrgDb = org.Hs.eg.db
-)
-length(gene_translation)
-uniquegene <- gene_translation$SYMBOL %>% dis
-gene_translation$ENSEMBL
-geneID <-  gene_translation %>% count(SYMBOL) %>% filter(n == 1) %>% pull(SYMBOL)
-
-esid_keep <-  gene_translation %>%  filter(SYMBOL %in% geneID) 
-esid_keep
-gene_translation %>% count(SYMBOL) %>% filter(n == 1) 
-
-gene_translation %>%  filter(SYMBOL %in% geneID) 
-
-dplyr::pull()
-gene_translation %>% filter(!is.na(SYMBOL))
-
-
-
-n_cells <- dims[1]
-n_genes <- dims[2]
-n_genes
-n_cells
-dims
-n_genes
-raw_counts_matrix <- sparseMatrix(
-  i = mtx_data_lung$i_row_idx,
-  j = mtx_data_lung$j_col_idx,
-  x = mtx_data_lung$count,
-  dims = c(n_cells, n_genes),
-  dimnames = list(barcodes, genes)
+normal_lung_files <- list(
+  h5ad = "normallungT.h5ad",
+  mtx = "normallung.mtx"
 )
 
-geneID
-gene_translation %>%  filter(SYMBOL %in% geneID) 
-raw_counts_matrix <-  raw_counts_matrix[,esid_keep$ENSEMBL] %>%  `colnames<-`(esid_keep$SYMBOL)
-raw_counts_matrix
-
-nromallung <-  CreateSeuratObject(counts = t(raw_counts_matrix),   assay = "RNA",  
-                           min.cells = 100,
-                           meta.data = cell_metadata)
-saveRDS(nromallung, "public/nromallung_T.rds")
-
-nromallung@assays$RNA@data
-
-nromallung$development_stage %>%  table()
- 
-
-CD3list <- list(c("CD3D", "CD3E", "CD3G"))
-
-TRDlist <- list(c("TRDV1", "TRDV2", "TRDV3", "TRDV4", 'TRDC'))
-
-TRABlist <- list(
-  grep("^TRAV|^TRBV|TRBC1|TRBC2|^TRAC", rownames(nromallung), value = T)
-  
-)
-TRABlist
-
-nromallung@meta.data
-nromallung  %<>% AddModuleScore(features = CD3list, name = "CD3_score") %>% 
-  AddModuleScore(features = TRDlist, name = "TRD_score") %>% 
-  AddModuleScore(features = TRABlist, name = "TRAB_score")
-
-ViolinPlot(nromallung, group.by =   "sex", g= c("CD3_score1", "TRD_score1","TRAB_score1"),
-           x.angle = 90, colors = ggplotColours(60), sz = 0.5, ncol = 3  ) 
-
-
-
-ViolinPlot(nromallung, group.by =   "cell_type", g= c( "TRD_score1"), mythe = F, othertheme = list(theme(axis.text.x = element_text(size = 11, angle = 90))),
-           x.angle = 90, sz =1, ncol = 1 , colors = umap.colors ) 
-nromallung$cell_type
-
-
-Feature_rast(nromallung, d1 = "TRAB_score1", d2 = "TRD_score1", 
-            othertheme = list( geom_hline(yintercept = 0.20
-                                          , linewidth = 0.5, linetype = "dashed"),
-                               geom_vline(xintercept = -0.018, linewidth = 0.5,linetype = "dashed")),
-            noaxis = F, axis.number = T, do.label = F, g = c(  "TRDV2", "TRDV1"),  navalue = "lightgrey") 
-
-
-
-nromallung@meta.data   %<>% mutate(gdTcells_infered = case_when( 
-  TRAB_score1 <= 0 & TRD_score1 >=  0.2 ~ "gdT", TRUE ~ "nongdT"
-))
-
-
-Feature_rast(nromallung, d1 = "TRAB_score1", d2 = "TRD_score1", 
-             othertheme = list( geom_hline(yintercept = 0.2, linewidth = 0.5, linetype = "dashed"),
-                                geom_vline(xintercept = 0, linewidth = 0.5,linetype = "dashed")), mythe =F, colorset = c("red", "lightgrey"),
-             noaxis = F, axis.number = T, do.label = F, g = c(   "gdTcells_infered"),  navalue = "lightgrey") 
-
-nromallung@meta.data
-nromallung@assays$RNA@data
-nromallung_gdT <- subset(nromallung,   gdTcells_infered == "gdT" & CD4 < 0.2) 
-
-
-dim(nromallung_gdT)
-
-nromallung_gdT@assays$RNA@scale.data
-
-nromallung_gdT@meta.data
-nromallung_gdT <- FindVariableFeatures(nromallung_gdT, selection.method = "vst", nfeatures = 1500)
-
-
-var_genes <- VariableFeatures(nromallung_gdT) %>% 
-  str_subset("^(MT|RP[SL]|HIST|^AC|^AL|^AF|-AS1$|^AP|^TRA|^TRB|^IG|LINC|LOC|^MIR|$DT)", negate = TRUE)  %T>% print()
-var_genes <-  c(var_genes, c('CD4', "CD8A", "CD8B", "ZNF683", "ITGAE", "CXCR6", "AREG", "CSF1", "CSF2", "GZMB", "GZMA", "RORC"))
-
-nromallung_gdT %<>% ScaleData(vars.to.regress = c("nFeature_RNA", "institute", "donor_age","self_reported_ethnicity"), verbose = FALSE)
-nromallung_gdT@meta.data 
-
-nromallung_gdT <- RunPCA(nromallung_gdT, features = var_genes, verbose = FALSE, npcs = 100)
-ElbowPlot(nromallung_gdT, ndims = 50) 
-
-nromallung_gdT <- JackStraw(nromallung_gdT, num.replicate = 100, dims = 80)
-# ScoreJackStraw(sepsis_2, dims = 1:100) %>% 
-#   ggplot(aes(x = dims, y = score)) + 
-#   geom_point() + 
-#   geom_line() + 
-#   labs(title = "Jackstraw scores for Sepsis Batch2 PCA") +
-#   theme_minimal()
-nromallung_gdT <- ScoreJackStraw(nromallung_gdT, dims = 1:80) 
-JackStrawPlot(nromallung_gdT, 1:80) + 
-  geom_vline(xintercept = 20, linetype = "dashed", color = "red") +
-  labs(title = "Jackstraw plot for gdT lung")
-
-
-nromallung_gdT <- RunUMAP(nromallung_gdT, dims = 1:19, verbose = FALSE, reduction.key = "UMAP_", min.dist = 0.00) %>% 
-  FindNeighbors(dims = 1:19, verbose = FALSE) %>% 
-  FindClusters(resolution = 1, verbose = FALSE)
-
-nromallung_gdT <-RunUMAP(nromallung_gdT, dims = 1:20, verbose = FALSE, reduction.key = "UMAP_", min.dist = 0.001)
-
-nromallung_gdT  %<>%    FindClusters(resolution = 1.5, verbose = FALSE)
-
-
-ViolinPlot(nromallung_gdT, c("TRDV1", "TRDV2", "TRDV3"), group.by = "gdTCR",colors = umap.colors)
-nromallung_gdT$bc <-  colnames(nromallung_gdT)
-
-Feature_rast(nromallung_gdT, d1 = "TRDV3", d2 = "TRDV2", g = "gdTCR", noaxis = F, axis.number = T)
-nromallung_gdT
-Vd1bc <-  nromallung_gdT %>% subset(TRDV1 > 0.5) %>% colnames()
-Vd2bc <-  nromallung_gdT %>% subset(TRDV2 > 0.5) %>% colnames()
-Vd3bc <-  nromallung_gdT %>% subset(TRDV3 > 0.5) %>% colnames()
-nromallung_gdT@meta.data  %<>% mutate(
-  TRDVs = case_when(
-                    (bc %in% Vd1bc) & ( bc %in% Vd2bc) ~ "DP",
-                   bc %in% Vd1bc ~ "Vd1",
-                    bc %in% Vd2bc ~ "Vd2",
-                    bc %in% Vd3bc ~ "Vd3")
-  
+gdt_marker_sets <- list(
+  CD3 = c("CD3D", "CD3E", "CD3G"),
+  TRD = c("TRDV1", "TRDV2", "TRDV3", "TRDV4", "TRDC"),
+  TRAB_pattern = "^TRAV|^TRBV|TRBC1|TRBC2|^TRAC"
 )
 
+load_public_lung_dataset <- function(paths, min_cells = 100) {
+  mtx_data <- data.table::fread(
+    paths$mtx,
+    skip = 3,
+    col.names = c("i_row_idx", "j_col_idx", "count")
+  )
+  dims <- as.numeric(strsplit(readLines(paths$mtx, n = 3)[3], " ")[[1]])
 
+  ad <- read_h5ad(paths$h5ad)
+  genes <- ad$var_names
+  barcodes <- ad$obs_names
+  cell_metadata <- ad$obs
 
-nromallung_gdT@meta.data  %<>% mutate(gdTCR = case_when(seurat_clusters == "7" ~ "Vd2", TRUE~  "Vd1/Vd3"))
-nromallung_gdT$donor_age %>% unique()
-Feature_rast(nromallung_gdT, c("ident", "ZNF683", "gdTCR"))
-Feature_rast(nromallung_gdT, c("ident", "donor_age"))
-Feature_rast(nromallung_gdT, c("ident", "ITGA1", "TRDV2"))
+  gene_translation <- bitr(
+    geneID = genes,
+    fromType = "ENSEMBL",
+    toType = "SYMBOL",
+    OrgDb = org.Hs.eg.db
+  ) %>%
+    filter(!is.na(SYMBOL)) %>%
+    group_by(SYMBOL) %>%
+    filter(n() == 1) %>%
+    ungroup()
 
-ViolinPlot(nromallung_gdT, "ITGA1", group.by = "seurat_clusters", sz = 1.2)
+  raw_counts_matrix <- sparseMatrix(
+    i = mtx_data$i_row_idx,
+    j = mtx_data$j_col_idx,
+    x = mtx_data$count,
+    dims = c(dims[1], dims[2]),
+    dimnames = list(barcodes, genes)
+  )
 
+  raw_counts_matrix <- raw_counts_matrix[, gene_translation$ENSEMBL]
+  colnames(raw_counts_matrix) <- gene_translation$SYMBOL
 
-
-nromallung_gdT$seurat_clusters
-Feature_density(nromallung_gdT, c("TRDV1", "TRDV2", "TRDV3", "ZNF683", "ITGA1", "ITGAE", "TCF7", "CCR7", "KLRB1", "CCR6","DPP4" , "RORC", 
-                                  "KLRG1", "AREG", "CSF2", "TBX21", "TNF", "GZMB", "EOMES", "GATA3"), sz = 0.4)
-
-nromallung_gdT@meta.data %>%  group_by(donor_age, seurat_clusters) %>% 
-  summarise(n = n() )%>% group_by(donor_age) %>%  mutate(percent = n/sum(n)*100, total = sum(n)) %>%  filter(seurat_clusters == 8) 
-
-
-nromallung_gdT@meta.data %<>% mutate(age_stage = case_when(  donor_age %in% c("20 years", "20-24 years", "23 years", "25 years", "25-30 years", "27 years","33 years") ~ "young adult",
-   donor_age %in% c("35-39 years", "48 years", "40-44 years", "50-54 years") ~ "mid age",
-   donor_age %in% c("64 years",  "68 years",    "75 years",   "73 years"  , "70-74 years") ~ "old"
-  
-  ))
-
-nromallung$donor_age %>% table() %>% prop.table()*100
-
-nromallung_gdT$donor_age %>% table() %>% prop.table()*100
-table(nromallung_gdT$donor_age, nromallung_gdT$donor_id )
-
-nromallung_gdT$donor_smoking_status
-
-Feature_rast(nromallung_gdT, "age_stage", facets = "donor_smoking_status")
-
-table(nromallung_gdT$donor_id, nromallung_gdT$age_stage)
-saveRDS(nromallung_gdT, "public/nromallung_gdT.rds")
-
-Feature_rast(nromallung_gdT, "TRDVs", noaxis = F, sz = 1.5,
-             othertheme = list(coord_fixed()))
-
-Feature_rast(nromallung_gdT, c("ident", "TRDVs"), noaxis = F, sz = 1.5,
-             othertheme = list(coord_fixed()))
-
-Feature_density(nromallung_gdT, reduction = "ref.umap",
-                othertheme = list(coord_fixed(), NoLegend()),sz = 0.7,
-                c("CCR6", "RORC", "IL23R", "KLRB1"))
-
-
-Feature_density(nromallung_gdT, 
-                othertheme = list(coord_fixed(), NoLegend()),sz = 0.7,
-                c("AREG", "CSF1", "CSF2", "CTLA4"))
-
-
-Feature_rast(nromallung_gdT, 
-                othertheme = list(coord_fixed(), NoLegend()),sz = 0.7,
-                c("ZNF683", "ITGA1", "ITGAE", "CXCR6"))
-
-
-
-# intergrate normalllung_gdT to gdT ref
-
-GDTlung_s[["RNA"]]
-
-GDTlung_s_ref@assays
-GDTlung_s_ref <- GDTlung_s
-GDTlung_s_ref[[c("GM")]] <-  NULL  
-GDTlung_s_ref[[c("CITE")]] <-  NULL  
-GDTlung_s_ref[[c("HTO")]] <-  NULL  
-
-GDTlung_s_ref[[c("AUC")]] <-  NULL  
-
-GDTlung_s_ref  %<>%  RunUMAP( dims = 1:35, seed=1955,umap.method = "uwot", 
-                              return.model = T,assay = "integrated",
-                              reduction = 'pca', min.dist = 0.2 ,reduction.key = "umap_" )
-Feature_rast(GDTlung_s_ref, "pheno", d1 = "umap_1", d2 = "umap_2")
-
-
-multicores()
-gdTlung.anchors <- FindTransferAnchors(reference = GDTlung_s_ref, query = nromallung_gdT, dims = 1:30,
-                                        reference.reduction = "pca")
-
-
-predictions <- TransferData(anchorset = gdTlung.anchors, refdata = GDTlung_s_ref$pheno, dims = 1:30)
-
-predictions
-
-table(predictions$predicted.id)
-nromallung_gdT <- AddMetaData(nromallung_gdT, metadata = predictions)
-GDTlung_s_ref@reductions$umap
-
-nromallung_gdT <- MapQuery(anchorset = gdTlung.anchors, reference = GDTlung_s_ref, query = nromallung_gdT,
-                           refdata = list(celltype = "pheno"), reference.reduction = "pca", reduction.model = "umap")
-
-nromallung_gdT@reductions$ref.umap
-Feature_rast(nromallung_gdT, "predicted.id", d1 = "refUMAP_1", d2 = "refUMAP_2")
-Feature_rast(nromallung_gdT, "predicted.id")
-umapss <-  FetchData(nromallung_gdT, c("refUMAP_1", "refUMAP_2"))
-
-nromallung_gdT$UMAP_1 <- umapss$refUMAP_1
-nromallung_gdT$UMAP_2 <-  -(umapss$refUMAP_2)
-nromallung_gdT@reductions$ref.umap@cell.embeddings[,'refUMAP_2']  <- 
-
--(nromallung_gdT@reductions$ref.umap@cell.embeddings[,'refUMAP_2'])
-
-Feature_density(nromallung_gdT, "ZNF683" ,reduction = "ref.umap" )
-
-ViolinPlot(nromallung_gdT, c("ZNF683", "ITGA1", "ITGAE", "CXCR6"), group.by = "predicted.id", colors = umap.colors)
-
-ClusterCompare(nromallung_gdT, group.by = "predicted.id", 
-                 id1 = "Lung_TRM", id2= "Lung_circ")
-
-# numberts 
-nromallung_gdT$CD8.Cytotoxictiy1
-nromallung_gdT$Tissue.resident1
-#caculate scores
-for (i in names(sigtable)) {
-  nromallung_gdT <- AddModuleScore(nromallung_gdT, features = list(sigtable[[i]]), name = i, assay = 'RNA')
-  
+  CreateSeuratObject(
+    counts = t(raw_counts_matrix),
+    assay = "RNA",
+    min.cells = min_cells,
+    meta.data = cell_metadata
+  )
 }
 
-ViolinPlot(nromallung_gdT, c("CD8.Cytotoxictiy1", "Tissue.resident1"), colors = umap.colors, box = T)
-j
-TRM_nm <- nromallung_gdT@meta.data %>%  group_by(donor_age, seurat_clusters) %>% 
-  summarise(n = n() )%>% group_by(donor_age) %>%  mutate(percent = n/sum(n)*100, total = sum(n)) %>%  filter(seurat_clusters == 8) %>% filter(total > 25)
+score_gdt_modules <- function(obj, marker_sets) {
+  trab_genes <- grep(marker_sets$TRAB_pattern, rownames(obj), value = TRUE)
 
+  obj %>%
+    AddModuleScore(features = list(marker_sets$CD3), name = "CD3_score") %>%
+    AddModuleScore(features = list(marker_sets$TRD), name = "TRD_score") %>%
+    AddModuleScore(features = list(trab_genes), name = "TRAB_score")
+}
 
+infer_gdt_population <- function(obj, trab_threshold = 0, trd_threshold = 0.2) {
+  obj$gdTcells_infered <- if_else(
+    obj$TRAB_score1 <= trab_threshold & obj$TRD_score1 >= trd_threshold,
+    "gdT",
+    "nongdT"
+  )
+  obj
+}
 
-TRM_nm2 <- nromallung_gdT@meta.data %>%  group_by(donor_age, predicted.id) %>% 
-  summarise(n = n() )%>% group_by(donor_age) %>%  mutate(percent = n/sum(n)*100, total = sum(n)) %>%  filter(predicted.id == "Lung_TRM") 
+subset_gdt_population <- function(obj, cd4_cutoff = 0.2) {
+  subset(obj, gdTcells_infered == "gdT" & CD4 < cd4_cutoff)
+}
 
+preprocess_gdt_population <- function(obj, nfeatures = 1500, dims_to_use = 20, resolution = 1.5) {
+  obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = nfeatures)
 
-TRM_nm
-TRM_nm2
+  var_genes <- VariableFeatures(obj) %>%
+    str_subset("^(MT|RP[SL]|HIST|^AC|^AL|^AF|-AS1$|^AP|^TRA|^TRB|^IG|LINC|LOC|^MIR|$DT)", negate = TRUE)
+  var_genes <- union(var_genes, c("CD4", "CD8A", "CD8B", "ZNF683", "ITGAE", "CXCR6", "AREG", "CSF1", "CSF2", "GZMB", "GZMA", "RORC"))
+
+  obj <- ScaleData(
+    obj,
+    vars.to.regress = c("nFeature_RNA", "institute", "donor_age", "self_reported_ethnicity"),
+    verbose = FALSE
+  )
+
+  obj <- RunPCA(obj, features = var_genes, npcs = 100, verbose = FALSE)
+  obj <- RunUMAP(obj, dims = 1:dims_to_use, reduction.key = "UMAP_", min.dist = 0.001, verbose = FALSE)
+  obj <- FindNeighbors(obj, dims = 1:dims_to_use, verbose = FALSE)
+  FindClusters(obj, resolution = resolution, verbose = FALSE)
+}
+
+assign_trdv_usage <- function(obj, threshold = 0.5) {
+  obj$bc <- colnames(obj)
+
+  vd1_cells <- WhichCells(obj, expression = TRDV1 > threshold)
+  vd2_cells <- WhichCells(obj, expression = TRDV2 > threshold)
+  vd3_cells <- WhichCells(obj, expression = TRDV3 > threshold)
+
+  obj$TRDVs <- case_when(
+    obj$bc %in% vd1_cells & obj$bc %in% vd2_cells ~ "DP",
+    obj$bc %in% vd1_cells ~ "Vd1",
+    obj$bc %in% vd2_cells ~ "Vd2",
+    obj$bc %in% vd3_cells ~ "Vd3",
+    TRUE ~ NA_character_
+  )
+
+  obj$gdTCR <- if_else(obj$seurat_clusters == "7", "Vd2", "Vd1/Vd3")
+  obj
+}
+
+prepare_gdt_reference <- function(ref_obj, dims = 1:35, min_dist = 0.2, seed = 1955) {
+  assays_to_drop <- intersect(c("GM", "CITE", "HTO", "AUC"), names(ref_obj@assays))
+  if (length(assays_to_drop) > 0) {
+    for (assay in assays_to_drop) {
+      ref_obj[[assay]] <- NULL
+    }
+  }
+
+  ref_obj <- RunUMAP(
+    ref_obj,
+    dims = dims,
+    seed.use = seed,
+    umap.method = "uwot",
+    return.model = TRUE,
+    assay = "integrated",
+    reduction = "pca",
+    min.dist = min_dist,
+    reduction.key = "umap_"
+  )
+
+  ref_embeddings <- Embeddings(ref_obj, "umap")
+  ref_embeddings[, "umap_2"] <- -ref_embeddings[, "umap_2"]
+  ref_obj@reductions$umap@cell.embeddings <- ref_embeddings
+  ref_obj@reductions$umap@misc$model$embedding[, 2] <- -ref_obj@reductions$umap@misc$model$embedding[, 2]
+
+  ref_obj$Umap_1 <- ref_embeddings[, "umap_1"]
+  ref_obj$Umap_2 <- ref_embeddings[, "umap_2"]
+  ref_obj
+}
+
+map_query_to_reference <- function(query_obj, reference_obj, dims = 1:30, label = "pheno", reduction_model = "umap") {
+  anchors <- FindTransferAnchors(
+    reference = reference_obj,
+    query = query_obj,
+    dims = dims,
+    reference.reduction = "pca"
+  )
+
+  predictions <- TransferData(
+    anchorset = anchors,
+    refdata = reference_obj[[label]],
+    dims = dims
+  )
+
+  query_obj <- AddMetaData(query_obj, metadata = predictions)
+  query_obj <- MapQuery(
+    anchorset = anchors,
+    reference = reference_obj,
+    query = query_obj,
+    refdata = list(celltype = label),
+    reference.reduction = "pca",
+    reduction.model = reduction_model
+  )
+
+  ref_embeddings <- Embeddings(query_obj, "ref.umap")
+  ref_embeddings[, "refUMAP_2"] <- -ref_embeddings[, "refUMAP_2"]
+  query_obj@reductions$ref.umap@cell.embeddings <- ref_embeddings
+  query_obj$Umap_1 <- ref_embeddings[, "refUMAP_1"]
+  query_obj$Umap_2 <- ref_embeddings[, "refUMAP_2"]
+
+  list(query = query_obj, anchors = anchors, predictions = predictions)
+}
+
+score_signature_modules <- function(obj, signature_list, assay = "RNA") {
+  for (sig_name in names(signature_list)) {
+    obj <- AddModuleScore(
+      obj,
+      features = list(signature_list[[sig_name]]),
+      name = sig_name,
+      assay = assay
+    )
+  }
+  obj
+}
+
+compute_percent_by_group <- function(meta, grouping, category) {
+  meta %>%
+    group_by(across(all_of(c(grouping, category)))) %>%
+    summarise(n = n(), .groups = "drop_last") %>%
+    mutate(percent = n / sum(n) * 100, total = sum(n)) %>%
+    ungroup()
+}
+
+nromallung <- load_public_lung_dataset(normal_lung_files)
+nromallung <- score_gdt_modules(nromallung, gdt_marker_sets)
+nromallung <- infer_gdt_population(nromallung)
+
+saveRDS(nromallung, "public/nromallung_T.rds")
+
+nromallung_gdT <- nromallung %>%
+  subset_gdt_population() %>%
+  preprocess_gdt_population() %>%
+  assign_trdv_usage()
+
+nromallung_gdT <- score_signature_modules(nromallung_gdT, sigtable)
+
+nromallung_gdT@meta.data <- nromallung_gdT@meta.data %>%
+  mutate(
+    age_stage = case_when(
+      donor_age %in% c("20 years", "20-24 years", "23 years", "25 years", "25-30 years", "27 years", "33 years") ~ "young adult",
+      donor_age %in% c("35-39 years", "48 years", "40-44 years", "50-54 years") ~ "mid age",
+      donor_age %in% c("64 years", "68 years", "75 years", "73 years", "70-74 years") ~ "old",
+      TRUE ~ NA_character_
+    )
+  )
+
+saveRDS(nromallung_gdT, "public/nromallung_gdT.rds")
+
+Feature_rast(nromallung, d1 = "TRAB_score1", d2 = "TRD_score1", g = c("TRDV2", "TRDV1"))
+Feature_rast(nromallung, "gdTcells_infered", d1 = "TRAB_score1", d2 = "TRD_score1", colorset = c("red", "lightgrey"))
+Feature_rast(nromallung_gdT, c("ident", "TRDVs"))
+Feature_density(nromallung_gdT, c("ZNF683", "ITGA1", "ITGAE", "CXCR6"))
+
+GDTlung_s_ref <- prepare_gdt_reference(GDTlung_s)
+gdt_integrated <- readRDS("Lung_gdT_subset_seurat_ncRNA_rm.rds")
+
+nromallung_mapping <- map_query_to_reference(nromallung_gdT, GDTlung_s_ref)
+nromallung_gdT <- nromallung_mapping$query
+predictions <- nromallung_mapping$predictions
+
+gdt_mapping <- map_query_to_reference(gdt_integrated, GDTlung_s_ref)
+gdt_integrated <- gdt_mapping$query
+
+Feature_rast(nromallung_gdT, "predicted.id", d1 = "refUMAP_1", d2 = "refUMAP_2")
+Feature_density(nromallung_gdT, "ZNF683", reduction = "ref.umap")
+ViolinPlot(nromallung_gdT, c("ZNF683", "ITGA1", "ITGAE", "CXCR6"), group.by = "predicted.id", colors = umap.colors)
+ClusterCompare(nromallung_gdT, group.by = "predicted.id", id1 = "Lung_TRM", id2 = "Lung_circ")
+
+percent_by_cluster <- compute_percent_by_group(nromallung_gdT@meta.data, "donor_age", "seurat_clusters")
+TRM_nm <- percent_by_cluster %>% filter(seurat_clusters == 8, total > 25)
+TRM_nm2 <- compute_percent_by_group(nromallung_gdT@meta.data, "donor_age", "predicted.id") %>%
+  filter(predicted.id == "Lung_TRM")
 
 TRM_nm$disease <- "healthy"
 TRM_nm2$disease <- "healthy"
+TRM_rm_c <- data.frame(
+  disease = "COPD",
+  percent = c(65.51899, 45.04182, 11.11111, 70.89305, 60.33479, 29.16667, 10.37118)
+)
 
-TRM_rm_c  <- data.frame(disease = "COPD",
-                        percent = c(
-                          65.51899, 45.04182, 11.11111, 70.89305, 60.33479, 29.16667, 10.37118
-                        ))
+TRM_rm_cn <- data.frame(
+  disease = c(TRM_nm2$disease, TRM_rm_c$disease),
+  percent = c(TRM_nm2$percent, TRM_rm_c$percent)
+)
 
-TRM_rm_cn <-   data.frame(disease = c(TRM_nm2$disease, TRM_rm_c$disease), percent =c(TRM_nm2$percent, TRM_rm_c$percent)  )
-TRM_rm_cn 
-ggplot(TRM_rm_cn, aes(x = disease, y = percent)) + geom_boxplot()+geom_point(size = 2)+  ggpubr::stat_compare_means(  paired = F, method = 'wilcox') + theme_classic()+ylab("gdTRM%")
+ggplot(TRM_rm_cn, aes(x = disease, y = percent)) +
+  geom_boxplot() +
+  geom_point(size = 2) +
+  ggpubr::stat_compare_means(paired = FALSE, method = "wilcox") +
+  theme_classic() +
+  ylab("gdTRM%")
 
-  
+nromallung_gdT$pheno <- nromallung_gdT$predicted.id
+nromallung_gdT$Type3_module <- nromallung_gdT$Th171
+ViolinPlot(nromallung_gdT, c("TRGV9", "TRDV2", "Type3_module"), colors = umap.colors, group.by = "pheno", mythe = FALSE, x.angle = 90)
+ViolinPlot(nromallung_gdT, c("Terminal.exhausted1", "Tregs1", "CD8.Cytotoxictiy1"), colors = umap.colors, group.by = "pheno", mythe = FALSE, x.angle = 90, box = TRUE)
 
-
-
-
+Feature_rast(gdt_integrated, d1 = "refUMAP_1", d2 = "refUMAP_2", g = "predicted.id", facets = "Stage")
+Feature_rast(gdt_integrated, d1 = "refUMAP_1", d2 = "refUMAP_2", g = "TRDV3", facets = "Stage")
+Feature_rast(gdt_integrated %>% subset(Stage == "Adult"), d1 = "refUMAP_1", d2 = "refUMAP_2", g = "predicted.id", facets = "Donor")
