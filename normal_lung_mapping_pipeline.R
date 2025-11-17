@@ -50,17 +50,7 @@ config <- list(
   outputs = list(
     normal_lung_rds = "public/nromallung_T.rds",
     normal_lung_gdt_rds = "public/nromallung_gdT.rds"
-  ),
-  gdT_preprocessing = list(
-    min_cells = 100,
-    nfeatures = 1500,
-    dims_to_use = 20,
-    resolution = 1.5,
-    cd4_cutoff = 0.2,
-    trd_threshold = 0.2,
-    trab_threshold = 0
-  ),
-  copd_percentages = c(65.51899, 45.04182, 11.11111, 70.89305, 60.33479, 29.16667, 10.37118)
+  )
 )
 
 # -----------------------------------------------------------------------------
@@ -103,10 +93,21 @@ raw_counts_matrix <- sparseMatrix(
 raw_counts_matrix <- raw_counts_matrix[, gene_translation$ENSEMBL]
 colnames(raw_counts_matrix) <- gene_translation$SYMBOL
 
+# Parameters chosen during exploratory analysis
+gdT_preprocessing <- list(
+  min_cells = 100,
+  nfeatures = 1500,
+  dims_to_use = 20,
+  resolution = 1.5,
+  cd4_cutoff = 0.2,
+  trd_threshold = 0.2,
+  trab_threshold = 0
+)
+
 nromallung <- CreateSeuratObject(
   counts = t(raw_counts_matrix),
   assay = "RNA",
-  min.cells = config$gdT_preprocessing$min_cells,
+  min.cells = gdT_preprocessing$min_cells,
   meta.data = cell_metadata
 )
 
@@ -126,8 +127,8 @@ nromallung <- nromallung %>%
   AddModuleScore(features = list(trab_genes), name = "TRAB_score")
 
 nromallung$gdTcells_infered <- if_else(
-  nromallung$TRAB_score1 <= config$gdT_preprocessing$trab_threshold &
-    nromallung$TRD_score1 >= config$gdT_preprocessing$trd_threshold,
+  nromallung$TRAB_score1 <= gdT_preprocessing$trab_threshold &
+    nromallung$TRD_score1 >= gdT_preprocessing$trd_threshold,
   "gdT",
   "nongdT"
 )
@@ -139,13 +140,13 @@ message("Preprocessing inferred γδT subset ...")
 
 nromallung_gdT <- subset(
   nromallung,
-  gdTcells_infered == "gdT" & CD4 < config$gdT_preprocessing$cd4_cutoff
+  gdTcells_infered == "gdT" & CD4 < gdT_preprocessing$cd4_cutoff
 )
 
 nromallung_gdT <- FindVariableFeatures(
   nromallung_gdT,
   selection.method = "vst",
-  nfeatures = config$gdT_preprocessing$nfeatures
+  nfeatures = gdT_preprocessing$nfeatures
 )
 var_genes <- VariableFeatures(nromallung_gdT) %>%
   str_subset("^(MT|RP[SL]|HIST|^AC|^AL|^AF|-AS1$|^AP|^TRA|^TRB|^IG|LINC|LOC|^MIR|$DT)", negate = TRUE) %>%
@@ -160,13 +161,13 @@ nromallung_gdT <- ScaleData(
 nromallung_gdT <- RunPCA(nromallung_gdT, features = var_genes, npcs = 100, verbose = FALSE)
 nromallung_gdT <- RunUMAP(
   nromallung_gdT,
-  dims = 1:config$gdT_preprocessing$dims_to_use,
+  dims = 1:gdT_preprocessing$dims_to_use,
   reduction.key = "UMAP_",
   min.dist = 0.001,
   verbose = FALSE
 )
-nromallung_gdT <- FindNeighbors(nromallung_gdT, dims = 1:config$gdT_preprocessing$dims_to_use, verbose = FALSE)
-nromallung_gdT <- FindClusters(nromallung_gdT, resolution = config$gdT_preprocessing$resolution, verbose = FALSE)
+nromallung_gdT <- FindNeighbors(nromallung_gdT, dims = 1:gdT_preprocessing$dims_to_use, verbose = FALSE)
+nromallung_gdT <- FindClusters(nromallung_gdT, resolution = gdT_preprocessing$resolution, verbose = FALSE)
 
 nromallung_gdT$bc <- colnames(nromallung_gdT)
 vd1_cells <- WhichCells(nromallung_gdT, expression = TRDV1 > 0.5)
@@ -342,9 +343,11 @@ healthy_trm <- trm_prediction_summary %>%
   mutate(disease = "healthy") %>%
   select(disease, percent)
 
+copd_percentages <- c(65.51899, 45.04182, 11.11111, 70.89305, 60.33479, 29.16667, 10.37118)
+
 copd_trm <- tibble(
   disease = "COPD",
-  percent = config$copd_percentages
+  percent = copd_percentages
 )
 trm_disease_comparison <- bind_rows(healthy_trm, copd_trm)
 
