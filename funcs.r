@@ -118,12 +118,32 @@ grd <- scale_color_gradientn( na.value = alpha('lightgrey', 0.3),
 #' @param s Legend key size in mm (default: 3)
 #' @return Theme element for legend positioning
 
-gglp <- function(p = 'n', s= 3) {
-  position <-c('right', 'left', 'top', 'bottom', 'none') %>%
+gglp <- function(p = 'n', s = 3, nr = NULL, nc = NULL) {
+  # Map short codes to full position names
+  position <- c('right', 'left', 'top', 'bottom', 'none') %>%
     set_names(c('r', 'l', 't', 'b', 'n'))
-  theme(legend.position = position[[p]], legend.key.size = unit(s, 'mm') )
+  
+  # 1. Define the Theme (Position & Size)
+  t <- theme(legend.position = position[[p]], 
+             legend.key.size = unit(s, 'mm'))
+  
+  # 2. Define the Guides (Rows & Columns)
+  # We apply this to common aesthetics (fill, color, etc.) to ensure it catches your legend
+  g <- NULL
+  if (!is.null(nr) || !is.null(nc)) {
+    g <- guides(
+      fill   = guide_legend(nrow = nr, ncol = nc),
+      color  = guide_legend(nrow = nr, ncol = nc),
+      colour = guide_legend(nrow = nr, ncol = nc),
+      shape  = guide_legend(nrow = nr, ncol = nc),
+      size   = guide_legend(nrow = nr, ncol = nc),
+      alpha  = guide_legend(nrow = nr, ncol = nc)
+    )
+  }
+  
+  # Return both as a list
+  list(t, g)
 }
-
 
 # ============================================================================
   # COMPARISON AND ANALYSIS FUNCTIONS
@@ -815,6 +835,7 @@ do.label <- function(data = NULL, label = "center", color = 'black',
 
 
 # umapcolors --------------------------------------------------------------
+
 
 umap.colors <- c(
   "#0F95B9",

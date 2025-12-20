@@ -111,6 +111,13 @@ COPD_pub  %<>% AddModuleScore(features = TRABlist, name = "TRAB_score")
 
 Feature_rast(COPD_pub, c("CD3_score1", "TRD_score1", "TRAB_score1") )
 
+ViolinPlot(COPD_pub, c("TCRgamma-or-delta-prot"), assay = "Protein", group.by = "Level_3", x.angle = 90)
+
+
+COPD_pub@assays$Protein
+
+
+
 
 
 # select T cells  ---------------------------------------------------------
@@ -239,6 +246,12 @@ COPD_gdTcells<- NormalizeData(COPD_gdTcells, normalization.method = 'LogNormaliz
 COPD_gdTcells  %<>%    FindVariableFeatures(assay = 'RNA',nfeatures = 6000, selection.method = 'vst')
 %>%  ScaleData( assay = 'RNA',
                            vars.to.regress = c('nCount_RNA', 'percent.mito')) 
+
+COPD_gdTcells$nCount_Protein
+COPD_gdTcells  %<>%  ScaleData( assay = 'Protein',
+                           vars.to.regress = c('nCount_Protein'))
+
+
 COPD_gdTcells@assays$RNA@var.features
 COPD_gdTcells@assays$RNA@var.features <- GDTcell@assays$RNA@var.features%>%  
   str_subset('^RP|^MT|TRAV|TRBV|NO-NAME|IGL|IGH|LINC|MIR', negate = T)
@@ -302,16 +315,27 @@ Feature_rast(COPD_gdTcells, c("ITGA1", "ITGAE", "ZNF683", "CXCR6"),
 
 COPD_gdTcells@assays$Protein %>% rownames() %>%  sort()
 
-COPD_gdTcells@meta.data  %<>% mutate(gd_cluster = case_when(seurat_clusters == "0" ~ "gdTRM_1",
-                                                            seurat_clusters ==  "1" ~ 'gdTemra_1',
-                                                            seurat_clusters == "2" ~ "gdTRM_2",
-                                                            seurat_clusters == "3" ~ "gdTRM_3",
+
+Feature_rast(COPD_gdTcells, c("gd_cluster", "seurat_clusters"),
+             # assay = "Protein",
+             othertheme = list(coord_fixed()))
+
+COPD_gdTcells@meta.data  %<>% mutate(gd_cluster = case_when(seurat_clusters == "0" ~ "AREG+CD49a+gdTRM",
+                                                            seurat_clusters ==  "1" ~ 'gdTemra',
+                                                            seurat_clusters == "2" ~ "CD49a-gdTRM",
+                                                            seurat_clusters == "3" ~ "CD49a-gdTRM",
                                                             seurat_clusters == "4" ~"Type1_Vd2",
                                                             seurat_clusters == "5" ~ "Type3_Vd2",
-                                                            seurat_clusters == "6"~ "gdTemra_2",
+                                                            seurat_clusters == "6"~ "gdTemra",
                                                             seurat_clusters == "7" ~ "unidentified"))
 
 COPD_gdTcells  %<>% subset(gd_cluster != "unidentified")
+
+
+ClusterCompare(COPD_gdTcells, "AREG+CD49a+gdTRM","gdTemra", group.by = "gd_cluster", assay = "Protein", min.pct = 0.3)
+
+Feature_rast(COPD_gdTcells, "gd_cluster")
+
 
 
 
@@ -405,9 +429,19 @@ library(dplyr)
 library(patchwork)
 
 COPD_gdTcells@meta.data$disease %>% unique
-COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","Smoking-related ILD",  "GOLD I/II", "Bronchiolitis") ~ "COPD and Emphysema",  disease %in% c("Healthy", "Donor") ~ "Control" ))
+COPD_gdTcells@meta.data  %<>% mutate(COPD_vs_Ctrl = case_when(disease %in% c("Emphysema","Smoking-related ILD",  "GOLD I/II", "Bronchiolitis") ~ "COPD/Emphysema/ILD/Bronchiolitis",  disease %in% c("Healthy", "Normal") ~ "Normal/Healthy" ))
 
-Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", othertheme = list(coord_fixed()), colorset = umap.colors[c(15,13)], do.label = F)
+COPD_gdTcells@meta.data  %<>%  mutate(disease = case_when(
+  disease == "Healthy" ~ "Adjacent_normal_tissue",
+  disease == "Normal" ~ "Healthy_donor",
+  isTRUE(TRUE) ~ disease 
+))
+
+
+Feature_rast(COPD_gdTcells, "disease", othertheme = list(coord_fixed()), 
+             colorset = umap.colors[c(14:20)], do.label = F)
+
+Feature_rast(COPD_gdTcells, "COPD_vs_Ctrl", othertheme = list(coord_fixed()), colorset = umap.colors[c(14,15)], do.label = F)
 
 COPD_gdTcells$disease %>% unique()
 
@@ -441,7 +475,7 @@ COPD_design <- data.frame(colData(COPD_gdTcells_ab_milo))[,c("orig.ident", "COPD
 COPD_design
 rownames(COPD_design) <- COPD_design$orig.ident
 ## Reorder rownames to match columns of nhoodCounts(milo)
-COPD_design <- COPD_design[colnames(nhoodCounts(COPD_design)), , drop=FALSE]
+# COPD_design <- COPD_design[colnames(nhoodCounts(COPD_design)), , drop=FALSE]
 
 COPD_design
 
@@ -518,11 +552,17 @@ gcanno <- as.vector(c(' Naive or immature T cell',
                       'Treg core module'))
 
 
-ViolinPlot(COPD_gdTcells, c("GM_C", "GM_D", "GM_F", "GM_G", "GM_H"),
+ViolinPlot(COPD_gdTcells, c("GM_C", "GM_D", "GM_F", "GM_G", "Tissue.resident"),
            ncol = 2, box =T,
            colors = umap.colors)
+COPD_gdTcells$Tissue.resident
 
 
+COPD_gdTcells$RNA_snn_res.0.3
+
+Feature_rast(COPD_gdTcells, c("COPD_vs_Ctrl", "RNA_snn_res.0.5"),
+             othertheme = list(coord_fixed()))
+COPD_gdTcells$COPD_vs_Ctrl
 
 # DEGs --------------------------------------------------------------------
 
@@ -628,24 +668,29 @@ ClusterCompare(COPD_gdTcells, "gdTRM_1", "gdTemra_1", assay = "Protein")
 
 genelist_c0_c1 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTemra_1")
 
+genelist_c0_c1
+
 genelist_Type1_3_Vd2_c1 <- Genelist_generator(COPD_gdTcells, "Type1_Vd2", "Type3_Vd2")
 
-genelist_TRM_1_TRM_2 <- Genelist_generator(COPD_gdTcells, "gdTRM_1", "gdTRM_2")
+COPD_gdTcells$gd_cluster
+
+genelist_TRM_1_TRM_2 <- Genelist_generator(COPD_gdTcells, 'gdTRM_1' , "gdTRM_3")
 genelist_TRM_1_TRM_2
 
 
-ibrary(clusterProfiler)
+library(clusterProfiler)
 library(msigdbr)
 
 ALL_msigdb_G  <- rbind(
   # c7
-  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C7"),
   # hallmarker
-  msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
   # C2
-  msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG'),
+  # msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG'),
   # GOBP
-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')) %>% 
+  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory = 'GO:BP')
+  ) %>% 
   dplyr::select(gs_name, gene_symbol)
 
 
@@ -654,22 +699,28 @@ GOBP <-  msigdbr::msigdbr(species = "Homo sapiens", category = "C5",subcategory 
 
 GSEA_c0_c1 <- GSEA(geneList = genelist_c0_c1, TERM2GENE=ALL_msigdb_G,
                  # minGSSize    = 10,
-                 pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+                 pvalueCutoff = 0.05, pAdjustMethod = "fdr") 
 
 GSEA_c0_c1@result  <- GSEA_c0_c1@result %>% arrange(desc(NES))  %T>% view()
+
+GSEA_c0_c1@result %>% arrange(desc(NES)) %>%  filter(grepl( "GOBP", ID))
+
 
 HALLMARKERS <-   msigdbr::msigdbr(species = "Homo sapiens", category = "H") %>% 
   dplyr::select(gs_name, gene_symbol)
 
-GSEA_TRM1TRM2_H <-   GSEA(geneList = genelist_TRM_1_TRM_2, TERM2GENE=HALLMARKERS,
+GSEA_TRM1TRM2_H <-   GSEA(geneList = genelist_TRM_1_TRM_2, TERM2GENE=ALL_msigdb_G,
                         # minGSSize    = 10,
-                        pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+                        pvalueCutoff = 0.05, pAdjustMethod = "fdr") 
 
-GSEA_TRM1TRM2_H@result
+view(GSEA_TRM1TRM2_H@result)
 
 GSEA_c0_c1_GO <- GSEA(geneList = genelist_c0_c1, TERM2GENE=GOBP,
                    # minGSSize    = 10,
-                   pvalueCutoff = 0.05, pAdjustMethod = "BH") 
+                   pvalueCutoff = 0.05, pAdjustMethod = "fdr") 
+
+
+
 
 
 view(GSEA_c0_c1_GO@result)
