@@ -789,6 +789,8 @@ ViolinPlot(GDTlung_s, names(sigtable)[c(1:9, 14,15)], colors = umap.colors, box 
 # CITESEQ analysis --------------------------------------------------------
 
 
+Feature_rast(GDTlung_cite %>%  subset(patient == "p77"),  assay = "CITE",
+             c('ident',  "CD103.protein", "CD49a.protein" ,"CD69.protein"), do.label = F)
 
 
 
@@ -4063,6 +4065,17 @@ F2H <-  GSEA_multipplot(GSEA_TRMvsTEMRA_allref, c(
                             c1 = "gdTEMRA_LG3", c2 =  "gdTRM_LG6", base_size = 8 ) %T>% print()
 
 F2H+mytheme
+
+GSEA_multipplot(GSEA_TRMvsTEMRA_allref, c("GOBP_LEUKOCYTE_MEDIATED_CYTOTOXICITY",
+                              'GOBP_CELL_KILLING' ,
+                              "GSE7852_TREG_VS_TCONV_UP",
+                              "GOBP_MORPHOGENESIS_OF_A_BRANCHING_STRUCTURE",
+                              'GOBP_RESPONSE_TO_FIBROBLAST_GROWTH_FACTOR'),title = 'GSEA: Areg+gdTRM vs gdTemra', legendpvalue = T, legend.position = "no",
+                plots = 1:2, rel_h = c(1,0.25),
+                
+                c1 = "Areg+gdTRM ", c2 =  "gdTemra", base_size = 8 )
+
+
 
 
 F2Hnew_gene_module <-  

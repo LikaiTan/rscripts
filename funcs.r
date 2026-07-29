@@ -50,7 +50,7 @@ mytheme <- theme(plot.title = element_text(size = 6 , face = 'plain'),
 heattheme <-   theme(axis.text.y = element_text(size = 6, face = 'italic'),
                      legend.key.height  = unit(2, 'mm'),
                      legend.position = 'bottom',
-                     legend.margin = margin(-7,30,0,0, "mm"),
+                     # legend.margin = margin(-7,30,0,0, "mm"),
                      plot.subtitle = element_text(size = 6))
 
 #' Customizable heatmap theme function
@@ -68,21 +68,26 @@ heattheme <-   theme(axis.text.y = element_text(size = 6, face = 'italic'),
 #' @return Modified ggplot object with heatmap styling
 
 heat_theme <- function(gp,size = 6, legend.position = 'bottom',
-                       legend.margin = margin(-7,30,0,0, "mm"),
+                       legend.margin = NULL,
                        m = 'white', l = 'blue', h = 'red',
                        color = F, fill = NULL, dotsize = F){
+  theme_args <- list(
+    axis.text.y = element_text(size = size, face = 'italic'),
+    legend.key.height = unit(2, 'mm'),
+    legend.position = legend.position,
+    plot.subtitle = element_text(size = size,face = 'plain'),
+    legend.title = element_text(size = size),
+    strip.text = element_text(size = size),
+    legend.text = element_text(size = size),
+    axis.title = element_text(size = size),
+    axis.line = element_line(size = 0.25),
+    axis.text = element_text(size = size)
+  )
+  if (!is.null(legend.margin)) {
+    theme_args$legend.margin <- legend.margin
+  }
   gp+
-  theme(axis.text.y = element_text(size = size, face = 'italic'),
-        legend.key.height  = unit(2, 'mm'),
-        legend.position = legend.position,
-        legend.margin = legend.margin,
-        plot.subtitle = element_text(size = size,face = 'plain'),
-       legend.title = element_text(size = size),
-        strip.text = element_text(size = size),
-        legend.text = element_text(size = size),
-        axis.title = element_text(size = size),
-        axis.line = element_line(size = 0.25),
-        axis.text = element_text(size = size))+
+    do.call(theme, theme_args)+
     scale_fill_gradient2(mid = m, low =l, high = h)+
     guides(color = color, fill = fill, size = dotsize)
 
@@ -118,12 +123,32 @@ grd <- scale_color_gradientn( na.value = alpha('lightgrey', 0.3),
 #' @param s Legend key size in mm (default: 3)
 #' @return Theme element for legend positioning
 
-gglp <- function(p = 'n', s= 3) {
-  position <-c('right', 'left', 'top', 'bottom', 'none') %>%
+gglp <- function(p = 'n', s = 3, nr = NULL, nc = NULL) {
+  # Map short codes to full position names
+  position <- c('right', 'left', 'top', 'bottom', 'none') %>%
     set_names(c('r', 'l', 't', 'b', 'n'))
-  theme(legend.position = position[[p]], legend.key.size = unit(s, 'mm') )
+  
+  # 1. Define the Theme (Position & Size)
+  t <- theme(legend.position = position[[p]], 
+             legend.key.size = unit(s, 'mm'))
+  
+  # 2. Define the Guides (Rows & Columns)
+  # We apply this to common aesthetics (fill, color, etc.) to ensure it catches your legend
+  g <- NULL
+  if (!is.null(nr) || !is.null(nc)) {
+    g <- guides(
+      fill   = guide_legend(nrow = nr, ncol = nc),
+      color  = guide_legend(nrow = nr, ncol = nc),
+      colour = guide_legend(nrow = nr, ncol = nc),
+      shape  = guide_legend(nrow = nr, ncol = nc),
+      size   = guide_legend(nrow = nr, ncol = nc),
+      alpha  = guide_legend(nrow = nr, ncol = nc)
+    )
+  }
+  
+  # Return both as a list
+  list(t, g)
 }
-
 
 # ============================================================================
   # COMPARISON AND ANALYSIS FUNCTIONS
@@ -160,37 +185,85 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
                            rm = "^MT|^RP", test = 'bimod', angle = 20,
                            p_cutoff = 0.05, assay = 'RNA', slot = "data",
                            do.plot = TRUE, group.colors = NULL, features = NULL,
-                           min.pct = 0.1, genetoshow = 50, ds = 500) {
+                           min.pct = 0.1, genetoshow = 50, ds = 500,
+                           covar = NULL, covar.sort.by = NULL, cols.use = NULL,
+                           heatmap.slot = "scale.data") {
   DefaultAssay(ob) <- assay
-    if (!is.null(group.by)) {
-      ob <-  SetIdent(ob, value = group.by)
-    }
+  compare.by <- group.by %||% 'ident'
+  if (!is.null(group.by)) {
+    ob <- SetIdent(ob, value = group.by)
+  }
+  if (is.null(group.colors)) {
+    compare.levels <- unique(as.character(c(id1, id2)))
+    default.compare.colors <- c('#D55E00', '#0072B2', '#009E73', '#CC79A7', '#E69F00', '#56B4E9')
+    group.colors <- default.compare.colors[seq_along(compare.levels)]
+    names(group.colors) <- compare.levels
+  }
   result <- c()
-  result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
-                               logfc.threshold = log2fc, min.pct = min.pct, slot = slot,
-                               test.use = test)%>%
-    tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>% dplyr:: arrange(desc(avg_log2FC )) %>% dplyr::  mutate(pct.dff = pct.1 - pct.2)
+  result$table <- FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
+                              logfc.threshold = log2fc, min.pct = min.pct, slot = slot,
+                              test.use = test) %>%
+    tibble::rownames_to_column('gene') %>%
+    dplyr::filter(p_val_adj <= p_cutoff) %>%
+    dplyr::arrange(desc(avg_log2FC)) %>%
+    dplyr::mutate(pct.dff = pct.1 - pct.2)
 
-    result$table <- result$table %>%
-      dplyr:: filter(!grepl(rm, gene) )
+  result$table <- result$table %>%
+    dplyr::filter(!grepl(rm, gene))
 
   print(result$table)
-  
-  if (do.plot == TRUE) {
-    result$plot <- DoHeatmap(subset(ob, idents = c(id1, id2), downsample = ds),angle = angle,
-                             raster = T,size = gs(8),group.colors = group.colors,
-                             features = result$table[c(1:(genetoshow/2),
-                                                       (nrow(result$table)-(genetoshow/2-1)):nrow(result$table)
-                             ),]$gene)+
-      theme(text = element_text(size = 6), axis.text = element_text(size = 6),
-            legend.key.width = unit(2,'mm'),
-            axis.text.y = element_text(face = 'italic'))+mytheme+
-      scale_fill_gradient2(low = 'blue', mid = 'white',  high = "red")+
-      guides(color = FALSE)
-  }
-  
 
-  # print(result$plot)
+  if (do.plot == TRUE && nrow(result$table) > 0) {
+    top.n <- min(floor(genetoshow / 2), nrow(result$table))
+    bottom.start <- max(nrow(result$table) - top.n + 1, 1)
+    heatmap.features <- unique(result$table[c(seq_len(top.n), bottom.start:nrow(result$table)), 'gene'])
+    heatmap.object <- subset(ob, idents = c(id1, id2), downsample = ds)
+
+    if (identical(heatmap.slot, 'scale.data')) {
+      missing.scale <- setdiff(heatmap.features, rownames(GetAssayData(object = heatmap.object, assay = assay, layer = heatmap.slot)))
+      if (length(missing.scale) > 0) {
+        heatmap.object <- suppressWarnings(ScaleData(heatmap.object, assay = assay, features = unique(c(heatmap.features, missing.scale)), verbose = FALSE))
+      }
+    }
+
+    if (!is.null(covar)) {
+      if (is.null(cols.use)) {
+        cols.use <- list()
+      }
+      if (!is.null(group.colors) && is.null(cols.use[[compare.by]])) {
+        cols.use[[compare.by]] <- group.colors
+      }
+      result$plot <- DoMultiBarHeatmap(
+        object = heatmap.object,
+        features = heatmap.features,
+        group.by = compare.by,
+        additional.group.by = covar,
+        additional.group.sort.by = covar.sort.by,
+        cols.use = cols.use,
+        slot = heatmap.slot,
+        assay = assay,
+        raster = TRUE,
+        size = 3.5,
+        angle = angle
+      ) +
+        theme(text = element_text(size = 6), axis.text = element_text(size = 6),
+              legend.key.width = unit(2,'mm'),
+              axis.text.y = element_text(face = 'italic')) +
+        mytheme + heattheme + hmp +
+        guides(color = 'none')
+    } else {
+      result$plot <- DoHeatmap(heatmap.object, angle = angle,
+                               raster = TRUE, size = gs(8), group.colors = group.colors,
+                               features = heatmap.features) +
+        theme(text = element_text(size = 6), axis.text = element_text(size = 6),
+              legend.key.width = unit(2,'mm'),
+              axis.text.y = element_text(face = 'italic')) +
+        mytheme + heattheme + hmp +
+        guides(color = 'none')
+    }
+    result$heatmap.features <- heatmap.features
+  }
+
   return(result)
 }
 
@@ -816,6 +889,7 @@ do.label <- function(data = NULL, label = "center", color = 'black',
 
 # umapcolors --------------------------------------------------------------
 
+
 umap.colors <- c(
   "#0F95B9",
   "#B4DC49", 
@@ -987,7 +1061,7 @@ DoMultiBarHeatmap <- function (object,
   disp.max <- disp.max %||% ifelse(test = slot == "scale.data", 
                                    yes = 2.5, no = 6)
   possible.features <- rownames(x = GetAssayData(object = object, 
-                                                 slot = slot))
+                                                 layer = slot))
   if (any(!features %in% possible.features)) {
     bad.features <- features[!features %in% possible.features]
     features <- features[features %in% possible.features]
@@ -1012,7 +1086,7 @@ DoMultiBarHeatmap <- function (object,
   }
   
   data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
-                                                             slot = slot)[features, cells, drop = FALSE])))
+                                                             layer = slot)[features, cells, drop = FALSE])))
   
   object <- suppressMessages(expr = StashIdent(object = object, 
                                                save.name = "ident"))
@@ -1130,7 +1204,7 @@ DoMultiBarHeatmap <- function (object,
         
         plot <- suppressMessages(plot + 
                                    annotation_raster(raster = t(x = cols[[colname]][group.use2[[colname]]]),  xmin = -Inf, xmax = Inf, ymin = y.pos, ymax = y.max) + 
-                                   annotation_custom(grob = grid::textGrob(label = colid, hjust = 0, gp = gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)), ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) +
+                                   annotation_custom(grob = grid::textGrob(label = colid, hjust = 0, gp = grid::gpar(cex = 0.75)), ymin = mean(c(y.pos, y.max)), ymax = mean(c(y.pos, y.max)), xmin = Inf, xmax = Inf) +
                                    coord_cartesian(ylim = c(0, y.max), clip = "off")) 
         
         if ((colname == i) && label) {
@@ -1255,4 +1329,3 @@ plot_tcr_sharing <- function(tcr_data,
   return(plot)
 }
 # Example usage with your pre-processed data:
-
