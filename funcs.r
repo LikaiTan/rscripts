@@ -513,7 +513,8 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
   if (length(feature) ==1 ) {
    
  gp<- plot_density(object=data, features=feature, joint = joint, reduction = reduction,
-                             pal =pal, layer = layer, size =sz, method = method)+
+                             pal =pal,  slot = layer,
+, size =sz, method = method)+
       ( if (isTRUE(mythe)) {
         mytheme
       })+     
@@ -535,7 +536,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
    }
   } else {
    gp<- plot_density(object=data, features=feature, joint = joint, combine = F,reduction = reduction,
-                     pal =pal, layer = layer, size =sz, method = method)
+                     pal =pal,slot = layer, size =sz, method = method)
    gp <- map(gp, ~ .x +
                ( if (isTRUE(mythe)) {
                  mytheme
