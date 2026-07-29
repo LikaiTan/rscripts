@@ -200,20 +200,10 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
     names(group.colors) <- compare.levels
   }
   result <- c()
-<<<<<<< HEAD
-  result$table <- FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
-                              logfc.threshold = log2fc, min.pct = min.pct, slot = slot,
-                              test.use = test) %>%
-    tibble::rownames_to_column('gene') %>%
-    dplyr::filter(p_val_adj <= p_cutoff) %>%
-    dplyr::arrange(desc(avg_log2FC)) %>%
-    dplyr::mutate(pct.dff = pct.1 - pct.2)
-=======
   result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
                                logfc.threshold = log2fc, min.pct = min.pct, layer = layer,
                                test.use = test)%>%
     tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>% dplyr:: arrange(desc(avg_log2FC )) %>% dplyr::  mutate(pct.dff = pct.1 - pct.2)
->>>>>>> 5d51ccb (updated)
 
   result$table <- result$table %>%
     dplyr::filter(!grepl(rm, gene))
@@ -1068,11 +1058,7 @@ DoMultiBarHeatmap <- function (object,
   disp.max <- disp.max %||% ifelse(test = layer == "scale.data", 
                                    yes = 2.5, no = 6)
   possible.features <- rownames(x = GetAssayData(object = object, 
-<<<<<<< HEAD
-                                                 layer = slot))
-=======
                                                  layer = layer))
->>>>>>> 5d51ccb (updated)
   if (any(!features %in% possible.features)) {
     bad.features <- features[!features %in% possible.features]
     features <- features[features %in% possible.features]
@@ -1097,11 +1083,7 @@ DoMultiBarHeatmap <- function (object,
   }
   
   data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
-<<<<<<< HEAD
-                                                             layer = slot)[features, cells, drop = FALSE])))
-=======
                                                              layer = layer)[features, cells, drop = FALSE])))
->>>>>>> 5d51ccb (updated)
   
   object <- suppressMessages(expr = StashIdent(object = object, 
                                                save.name = "ident"))
