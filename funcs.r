@@ -169,7 +169,7 @@ gglp <- function(p = 'n', s = 3, nr = NULL, nc = NULL) {
 #' @param angle Angle for heatmap gene labels (default: 20)
 #' @param p_cutoff Adjusted p-value cutoff (default: 0.05)
 #' @param assay Assay to use (default: 'RNA')
-#' @param slot Data slot to use (default: "data")
+#' @param layer Data layer to use (default: "data")
 #' @param do.plot Generate heatmap plot (default: TRUE)
 #' @param group.colors Custom colors for groups
 #' @param features Specific features to test (default: NULL for all)
@@ -183,7 +183,7 @@ gglp <- function(p = 'n', s = 3, nr = NULL, nc = NULL) {
 
 ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
                            rm = "^MT|^RP", test = 'bimod', angle = 20,
-                           p_cutoff = 0.05, assay = 'RNA', slot = "data",
+                           p_cutoff = 0.05, assay = 'RNA', layer = "data",
                            do.plot = TRUE, group.colors = NULL, features = NULL,
                            min.pct = 0.1, genetoshow = 50, ds = 500,
                            covar = NULL, covar.sort.by = NULL, cols.use = NULL,
@@ -200,6 +200,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
     names(group.colors) <- compare.levels
   }
   result <- c()
+<<<<<<< HEAD
   result$table <- FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
                               logfc.threshold = log2fc, min.pct = min.pct, slot = slot,
                               test.use = test) %>%
@@ -207,6 +208,12 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
     dplyr::filter(p_val_adj <= p_cutoff) %>%
     dplyr::arrange(desc(avg_log2FC)) %>%
     dplyr::mutate(pct.dff = pct.1 - pct.2)
+=======
+  result$table <-  FindMarkers(ob, ident.1 = id1, ident.2 = id2, only.pos = F, features = features,
+                               logfc.threshold = log2fc, min.pct = min.pct, layer = layer,
+                               test.use = test)%>%
+    tibble::rownames_to_column('gene')  %>% dplyr::filter(p_val_adj <= p_cutoff) %>% dplyr:: arrange(desc(avg_log2FC )) %>% dplyr::  mutate(pct.dff = pct.1 - pct.2)
+>>>>>>> 5d51ccb (updated)
 
   result$table <- result$table %>%
     dplyr::filter(!grepl(rm, gene))
@@ -305,7 +312,7 @@ ClusterCompare <- function(ob, id1, id2,log2fc = 0.25,group.by = NULL,
 #' @param labels Custom labels for multiple plots
 #' @param sort Sort data by values for gradient plots (default: TRUE)
 #' @param assay Assay to use (default: DefaultAssay(data))
-#' @param slot Data slot to use (default: 'data')
+#' @param layer Data layer to use (default: 'data')
 #' @param navalue Color for NA values (default: "transparent")
 #' @return Single ggplot object or combined plot grid
 
@@ -317,14 +324,14 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
                
                          do.label = T, labelsize = 10, nrow = NULL, titlesize =6,othertheme = NULL,
                          d1 = "UMAP_1", d2 = 'UMAP_2',noaxis = T, axis.number = F, legendcol = NULL, legendrow=NULL, 
-                         labels = NULL, sort =TRUE, assay = DefaultAssay(data),slot = 'data',
+                         labels = NULL, sort =TRUE, assay = DefaultAssay(data),layer = 'data',
                       
                          navalue ="transparent" ) {
 
   if (class(data)[1] == 'Seurat') {
     DefaultAssay(data) <- assay
     fd <- FetchData(data, c(d1, d2,
-                            facets , g,other), layer = slot)
+                            facets , g,other), layer = layer)
   } else {
     fd <- data
   }
@@ -484,7 +491,7 @@ Feature_rast <- function(data, g = 'ident',facets = NULL, other = NULL,  sz = 0.
 #' @param navalue Color for NA values (default: "transparent")
 #' @param labels Custom plot labels
 #' @param assay Assay to use (default: DefaultAssay(data))
-#' @param slot Data slot to use
+#' @param layer Data layer to use
 #' @return Single plot or combined plot grid
 
 
@@ -495,7 +502,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
                            noaxis = T, axis.number = F,
                            colorgrd =  "grd1",navalue= "transparent",
                            
-                            labels = NULL,  assay = DefaultAssay(data),slot = NULL ) {
+                            labels = NULL,  assay = DefaultAssay(data),layer = NULL ) {
   
   # gradient color define 
   color_list1 <- c( alpha(c("#D4EDF7", "#347B99"), 0.5), "#4424D6", "#110934")  # Example colors
@@ -516,7 +523,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
   if (length(feature) ==1 ) {
    
  gp<- plot_density(object=data, features=feature, joint = joint, reduction = reduction,
-                             pal =pal, slot = slot, size =sz, method = method)+
+                             pal =pal, layer = layer, size =sz, method = method)+
       ( if (isTRUE(mythe)) {
         mytheme
       })+     
@@ -538,7 +545,7 @@ Feature_density <- function(data, feature = NULL,sz = 0.5,  pal = "viridis", red
    }
   } else {
    gp<- plot_density(object=data, features=feature, joint = joint, combine = F,reduction = reduction,
-                     pal =pal, slot = slot, size =sz, method = method)
+                     pal =pal, layer = layer, size =sz, method = method)
    gp <- map(gp, ~ .x +
                ( if (isTRUE(mythe)) {
                  mytheme
@@ -796,12 +803,12 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                        idents = NULL,alpha_point =0.8, alpha_fill = 0.4, 
                        jitter = T, box = F,
                        x.angle = 0, width = 0.25, Plotgrid = T, ylabtext ='\nexpression',size = 6,
-                       assay = DefaultAssay(data),slot = 'data',
+                       assay = DefaultAssay(data),layer = 'data',
                        labels = NULL, labelsize =6, labelface='plain',
                        mythe =T, titleface = 'italic'){
   if (length(g) == 1) {
     fig <- VlnPlot(data, g, pt.size = 0, idents = idents, group.by = group.by,
-                   split.by = facet, assay = assay, slot = slot)
+                   split.by = facet, assay = assay, layer = layer)
     cln = fig$data$ident %>% unique() %>% length()
                   fig +
             (if(isTRUE(jitter)){
@@ -825,7 +832,7 @@ ViolinPlot <- function(data, g, sz = 0.5, dpi = 300,
                     othertheme
   } else {
     gp <- lapply(g, function(i) {
-      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by,split.by = facet,assay = assay, slot = slot)
+      fig <- VlnPlot(data, i, pt.size = 0, idents = idents, group.by = group.by,split.by = facet,assay = assay, layer = layer)
     cln = fig$data$ident %>% unique() %>% length()
     fig +
       (if(isTRUE(jitter)){
@@ -1008,7 +1015,7 @@ multicores <- function(core=20, mem = 100, strategy = 'multicore') {
 #' @param group.bar Show grouping bars (default: TRUE)
 #' @param disp.min Minimum display value (default: -2.5)
 #' @param disp.max Maximum display value (default: NULL)
-#' @param slot Data slot to use (default: "scale.data")
+#' @param layer Data layer to use (default: "scale.data")
 #' @param assay Assay to use (default: NULL)
 #' @param label Show group labels (default: TRUE)
 #' @param size Label size (default: 5.5)
@@ -1037,7 +1044,7 @@ DoMultiBarHeatmap <- function (object,
                                group.bar = TRUE, 
                                disp.min = -2.5, 
                                disp.max = NULL, 
-                               slot = "scale.data", 
+                               layer = "scale.data", 
                                assay = NULL, 
                                label = TRUE, 
                                size = 5.5, 
@@ -1058,19 +1065,23 @@ DoMultiBarHeatmap <- function (object,
   features <- features %||% VariableFeatures(object = object)
   ## Why reverse???
   features <- rev(x = unique(x = features))
-  disp.max <- disp.max %||% ifelse(test = slot == "scale.data", 
+  disp.max <- disp.max %||% ifelse(test = layer == "scale.data", 
                                    yes = 2.5, no = 6)
   possible.features <- rownames(x = GetAssayData(object = object, 
+<<<<<<< HEAD
                                                  layer = slot))
+=======
+                                                 layer = layer))
+>>>>>>> 5d51ccb (updated)
   if (any(!features %in% possible.features)) {
     bad.features <- features[!features %in% possible.features]
     features <- features[features %in% possible.features]
     if (length(x = features) == 0) {
-      stop("No requested features found in the ", slot, 
-           " slot for the ", assay, " assay.")
+      stop("No requested features found in the ", layer, 
+           " layer for the ", assay, " assay.")
     }
     warning("The following features were omitted as they were not found in the ", 
-            slot, " slot for the ", assay, " assay: ", paste(bad.features, 
+            layer, " layer for the ", assay, " assay: ", paste(bad.features, 
                                                              collapse = ", "))
   }
   
@@ -1086,7 +1097,11 @@ DoMultiBarHeatmap <- function (object,
   }
   
   data <- as.data.frame(x = as.matrix(x = t(x = GetAssayData(object = object, 
+<<<<<<< HEAD
                                                              layer = slot)[features, cells, drop = FALSE])))
+=======
+                                                             layer = layer)[features, cells, drop = FALSE])))
+>>>>>>> 5d51ccb (updated)
   
   object <- suppressMessages(expr = StashIdent(object = object, 
                                                save.name = "ident"))

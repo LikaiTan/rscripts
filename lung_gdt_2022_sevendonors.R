@@ -2496,8 +2496,23 @@ view(DEGreg)
 ClusterCompare(CD4CD8, "TRM_1_P", "TRM_3_P", assay = "REG", log2fc = 0.01)
 
 
+# TCRscore ----------------------------------------------------------------
+
+trab_genes <- grep("^TRAV|^TRBV|TRBC1|TRBC2|^TRAC", rownames(GDTlung_s), value = TRUE)
+
+trd_genes  <- grep("^TRDV|^TRDJ|TRDC", rownames(GDTlung_s), value = TRUE)
+trd_genes
+GDTlung_s <- GDTlung_s %>%
+  AddModuleScore(features = list(trd_genes), name = "TRD_score") %>%
+  AddModuleScore(features = list(trab_genes), name = "TRAB_score")
+GDTlung_s$TRD_score1
 
 
+Feature_rast(GDTlung_s, g = c('v_gene_TRD', "v_gene_TRG"), d1 = "TRAB_score1", d2 = "TRD_score1", navalue = "black" , noaxis = F, axis.number = T )
+
+
+GDTlung_s@meta.data %>%  filter(TRD_score1 > -0.1) %>%  NROW()
+nrow(GDTlung_s@meta.data)
 # GSEA --------------------------------------------------------------------
 
 
@@ -2511,7 +2526,7 @@ ALL_msigdb_G  <- rbind(
   # c7 Immunology 
   msigdbr::msigdbr(species = "Homo sapiens", category = "C7"), 
   # hallmarker
-  msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
+  # msigdbr::msigdbr(species = "Homo sapiens", category = "H"),
   # C2 KEGG
   msigdbr::msigdbr(species = "Homo sapiens", category = "C2",subcategory = 'CP:KEGG'),
   # GOBP
